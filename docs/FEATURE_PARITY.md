@@ -1,0 +1,30 @@
+# Ario TUI feature parity
+
+Phase 1 delivers the extension shell and theme preference. The table maps later workflows to the HTTP routes verified at daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Paths are relative to the daemon origin.
+
+| TUI or browser workflow                                                                 | API or extension behavior                                                                                                                                                   | Phase |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| Daemon reachability, aria2 reachability, aggregate speed, active count, proxy status    | `GET /health`                                                                                                                                                               | 2–3   |
+| Category destination paths, proxy settings, and aria2 defaults                          | `GET /settings` and the snapshot in `GET /health`. Display these as read-only.                                                                                              | 2     |
+| Download list, live status/progress, queue/category/status filters, and sort            | `GET /downloads` with `queue_id`, `category`, `status`, `sort_by`, and `sort_desc`. Search filename and URL locally within the result.                                      | 3     |
+| All Queues and individual queue selection, status and summaries                         | `GET /queues` and filtered `GET /downloads`. All Queues is a virtual selection.                                                                                             | 3     |
+| Paste and select URLs or magnet links, submit individually, start now or save for later | `POST /downloads` with the appropriate `AddDownloadsRequest` inputs, queue, start mode, and overrides                                                                       | 4     |
+| Add local torrent file                                                                  | `POST /downloads/torrent`, multipart `metadata` and `file`, 16 MiB file limit                                                                                               | 4     |
+| Download details, copy URL and path                                                     | `GET /downloads/{id}` and clipboard interaction                                                                                                                             | 4     |
+| Pause, start, resume, retry, or restart according to download status                    | `POST /downloads/{id}/pause` or `POST /downloads/{id}/resume`, as in the TUI                                                                                                | 4     |
+| Edit per-download fine-tuning or move to another queue                                  | `PUT /downloads/{id}/finetune`, `PUT /downloads/{id}/queue`                                                                                                                 | 4     |
+| Remove record, optionally delete files, or clear completed records                      | `DELETE /downloads/{id}`, with `delete_files=true` for deletion on disk. Use `DELETE /downloads/completed` with optional `queue_id`                                         | 4     |
+| Read, create, and edit queue preferences and overrides                                  | `GET /queues/{id}`, `POST /queues`, `PUT /queues/{id}`                                                                                                                      | 5     |
+| One-time, daily, weekly, and overnight scheduling with missed start and stop handling   | Queue schedule via `POST /queues` or `PUT /queues/{id}`. Weekly times follow the daemon’s timezone                                                                          | 5     |
+| Success and automatic-stop commands with their latest results                           | Queue event fields via `POST /queues` and `PUT /queues/{id}`. Queues include command results. The daemon executes commands.                                                 | 5     |
+| Reorder downloads within a queue                                                        | `PUT /queues/{queue_id}/reorder`                                                                                                                                            | 5     |
+| Start, pause, or delete a queue with confirmation for nonempty queues                   | `POST /queues/{id}/resume`, `POST /queues/{id}/pause`, `DELETE /queues/{id}` with `delete_downloads` where confirmed. Protect Main Queue and the virtual All Queues choice. | 5     |
+| Browser capabilities and durable handoff                                                | Planned `GET /browser-capabilities`, `POST /browser-handoffs`, `GET /browser-handoffs/{id}`, and commit/abort subroutes                                                     | 6     |
+| Send a link from its context menu with explicit confirmation                            | Browser menu and confirmation window use staged handoff with optional session context                                                                                       | 7     |
+| Capture reproducible browser downloads and recover interrupted handoffs                 | Browser download adapter and durable handoff with explicit enablement, confirmation, and default preferences                                                                | 8     |
+
+## Native and deferred workflows
+
+- Native daemon launch and shutdown remain TUI workflows. The extension leaves the daemon running after the UI closes.
+- Opening or revealing local files and folders stays native. The extension will offer paths users can copy.
+- Daemon configuration writes, remote connections, and mobile browser support are outside the planned extension scope.

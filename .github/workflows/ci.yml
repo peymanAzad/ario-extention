@@ -1,0 +1,32 @@
+name: Extension CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm zip
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm smoke:chrome
+      - uses: browser-actions/setup-firefox@v1
+        id: firefox
+      - run: pnpm smoke:firefox
+        env:
+          FIREFOX_PATH: ${{ steps.firefox.outputs.firefox-path }}

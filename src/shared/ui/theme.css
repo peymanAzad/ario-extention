@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+@custom-variant dark {
+  &:where([data-appearance='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-appearance='light']) *) {
+      @slot;
+    }
+  }
+}
+
+:root {
+  color-scheme: light dark;
+  --background: light-dark(#ffffff, #171c1b);
+  --foreground: light-dark(#202c28, #edf3f0);
+  --sidebar: light-dark(#f6f8f7, #121615);
+  --card: light-dark(#ffffff, #202725);
+  --card-foreground: var(--foreground);
+  --muted: var(--sidebar);
+  --muted-foreground: light-dark(#66756e, #99aaa2);
+  --border: light-dark(#e5eae7, #2b3530);
+  --accent: light-dark(#edf2ef, #26312b);
+  --accent-foreground: var(--foreground);
+  --mint-muted: light-dark(#e1f3eb, #263d32);
+  --primary: light-dark(#237858, #96dfba);
+  --primary-foreground: light-dark(#ffffff, #142b20);
+  --destructive: light-dark(#b74545, #e89d97);
+  --ring: var(--primary);
+  --radius: 0.75rem;
+}
+
+:root[data-appearance='light'] {
+  color-scheme: light;
+}
+
+:root[data-appearance='dark'] {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-mint-muted: var(--mint-muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 5px);
+  --radius-lg: var(--radius);
+}
+
+@layer base {
+  body {
+    @apply bg-background font-sans text-foreground;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  h1 {
+    @apply text-xl font-semibold tracking-[-0.03em];
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+}
+
+/* Give the toolbar a preferred size before it assigns the page a viewport. */
+.popup-viewport {
+  width: 780px;
+  height: 580px;
+  overflow: hidden;
+}
+
+.popup-page {
+  width: min(780px, 100vw);
+  height: min(580px, 100vh);
+  overflow: hidden;
+}
+
+.popup-page #root {
+  height: 100%;
+}
