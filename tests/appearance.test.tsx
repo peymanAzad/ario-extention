@@ -1,68 +1,41 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fakeBrowser } from '@webext-core/fake-browser';
-import { describe, expect, it } from 'vitest';
-import { Options } from '@/features/appearance/options';
-import { ThemeProvider } from '@/features/appearance/theme-provider';
-import {
-  readAppearance,
-  watchAppearance,
-  writeAppearance,
-} from '@/shared/storage/appearance';
+import { expect, it } from 'vitest';
+import { Options } from '@/features/settings/options';
+import { saveSettings } from '@/shared/browser/messages';
+import { readSettings } from '@/shared/storage/settings';
+import { connectTestBackground, renderPage } from './render-page';
 
-describe('appearance storage', () => {
-  it('falls back to System for absent or invalid data', async () => {
-    await expect(readAppearance()).resolves.toBe('system');
-
-    await fakeBrowser.storage.local.set({ appearance: 'obsolete-value' });
-
-    await expect(readAppearance()).resolves.toBe('system');
-  });
-
-  it('observes writes and resets from another extension page', async () => {
-    const values: string[] = [];
-    const stop = watchAppearance((value) => values.push(value));
-    try {
-      await writeAppearance('dark');
-      await fakeBrowser.storage.local.remove('appearance');
-
-      expect(values).toEqual(['dark', 'system']);
-    } finally {
-      stop();
-    }
-  });
-});
-
-it('saves the selected theme and restores it on remount', async () => {
+it('restores the Phase 1 appearance and saves theme changes in versioned settings', async () => {
+  connectTestBackground();
+  await fakeBrowser.storage.local.set({ appearance: 'dark' });
   const user = userEvent.setup();
-  const settings = render(
-    <ThemeProvider>
-      <Options />
-    </ThemeProvider>,
-  );
+  const page = renderPage(<Options />);
 
-  await waitFor(() =>
-    expect(screen.getByRole('radio', { name: 'Dark' })).toBeEnabled(),
-  );
-  expect(screen.getByRole('radio', { name: 'System' })).toBeChecked();
-  await user.click(screen.getByText('Dark'));
-  await waitFor(() =>
-    expect(document.documentElement).toHaveAttribute('data-appearance', 'dark'),
-  );
-  await expect(readAppearance()).resolves.toBe('dark');
-  settings.unmount();
-
-  render(
-    <ThemeProvider>
-      <Options />
-    </ThemeProvider>,
-  );
   await waitFor(() =>
     expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked(),
   );
+  await user.click(screen.getByText('Light', { exact: true }));
+  await waitFor(() =>
+    expect(document.documentElement).toHaveAttribute(
+      'data-appearance',
+      'light',
+    ),
+  );
+  await expect(readSettings()).resolves.toMatchObject({
+    version: 1,
+    appearance: 'light',
+  });
+  page.unmount();
 
-  await writeAppearance('light');
+  renderPage(<Options />);
   await waitFor(() =>
     expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked(),
+  );
+
+  await saveSettings({ appearance: 'system' });
+  await waitFor(() =>
+    expect(screen.getByRole('radio', { name: 'System' })).toBeChecked(),
   );
 });

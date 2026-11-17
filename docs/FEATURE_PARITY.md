@@ -1,6 +1,6 @@
 # Ario TUI feature parity
 
-Phase 1 delivers the extension shell and theme preference. The table maps later workflows to the HTTP routes verified at daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Paths are relative to the daemon origin.
+Phases 1 and 2 deliver the extension shell, saved appearance and connection settings, connection checks, and read-only daemon settings. The table maps workflows to the HTTP routes verified at daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Paths are relative to the daemon origin.
 
 | TUI or browser workflow                                                                 | API or extension behavior                                                                                                                                                   | Phase |
 | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |

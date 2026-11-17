@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
+import { startTestDaemon } from './daemon.mjs';
 
 const { directory, manifest } = await readBuild('chrome');
 assert.equal(manifest.background.service_worker, 'background.js');
@@ -18,7 +19,9 @@ const context = await chromium.launchPersistentContext('', {
   viewport: null,
 });
 
+let daemon;
 try {
+  daemon = await startTestDaemon();
   const browser = context.browser();
   assert.ok(browser);
   const cdp = await browser.newBrowserCDPSession();
@@ -64,6 +67,23 @@ try {
   await options.waitForFunction(
     () => !document.querySelector('fieldset').disabled,
   );
+  const address = options.getByRole('textbox', { name: 'Server address' });
+  await address.fill('http://example.test');
+  await options.getByRole('button', { name: 'Test connection' }).click();
+  await options
+    .getByRole('alert')
+    .filter({ hasText: 'Enter an HTTP address' })
+    .waitFor();
+  await address.fill(daemon.origin);
+  await options.getByRole('button', { name: 'Test connection' }).click();
+  await options.getByText('Connection test', { exact: true }).waitFor();
+  await options
+    .getByText('Connected · aria2 is ready', { exact: true })
+    .last()
+    .waitFor();
+  await options.getByRole('button', { name: 'Save address' }).click();
+  await options.getByRole('heading', { name: 'Download locations' }).waitFor();
+  await popup.getByText('Daemon connected', { exact: true }).waitFor();
   await options.getByText('Dark', { exact: true }).click();
   await popup.waitForFunction(
     () => document.documentElement.dataset.appearance === 'dark',
@@ -74,6 +94,7 @@ try {
   await options.waitForFunction(
     () => document.querySelector('input[value=dark]').checked,
   );
+  assert.equal(await address.inputValue(), daemon.origin);
   await options.getByText('Light', { exact: true }).click();
   await popup.waitForFunction(
     () => document.documentElement.dataset.appearance === 'light',
@@ -94,7 +115,9 @@ try {
   await popup.goto(`${origin}/confirmation.html`);
   await popup.getByRole('heading', { name: 'Download with Ario' }).waitFor();
 
+  daemon.verify();
   console.log('Chromium MV3 smoke passed.');
 } finally {
   await context.close();
+  await daemon?.close();
 }

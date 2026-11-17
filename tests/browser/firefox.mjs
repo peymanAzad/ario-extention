@@ -5,6 +5,7 @@ import { By, until } from 'selenium-webdriver';
 import firefox from 'selenium-webdriver/firefox.js';
 import app from '../../package.json' with { type: 'json' };
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
+import { startTestDaemon } from './daemon.mjs';
 
 const { manifest } = await readBuild('firefox');
 assert.deepEqual(manifest.background.scripts, ['background.js']);
@@ -28,7 +29,9 @@ const service = new firefox.ServiceBuilder(process.env.GECKODRIVER_PATH)
   .build();
 const driver = firefox.Driver.createSession(options, service);
 
+let daemon;
 try {
+  daemon = await startTestDaemon();
   assert.equal(await driver.installAddon(archive, true), id);
   const origin = `moz-extension://${uuid}`;
   const heading = (label) =>
@@ -67,6 +70,39 @@ try {
     10_000,
   );
 
+  const address = await driver.findElement(By.id('daemon-address'));
+  const button = (name) =>
+    driver.findElement(By.xpath(`//button[text()="${name}"]`));
+  const waitForText = (text) =>
+    driver.wait(
+      until.elementLocated(By.xpath(`//*[text()="${text}"]`)),
+      10_000,
+    );
+  await address.clear();
+  await address.sendKeys('http://example.test');
+  await (await button('Test connection')).click();
+  await driver.wait(
+    until.elementLocated(
+      By.xpath('//*[@role="alert" and contains(., "Enter an HTTP address")]'),
+    ),
+    10_000,
+  );
+  await address.clear();
+  await address.sendKeys(daemon.origin);
+  await (await button('Test connection')).click();
+  await driver.wait(
+    until.elementLocated(
+      By.xpath(
+        '//p[text()="Connection test"]/following-sibling::*//p[text()="Connected · aria2 is ready"]',
+      ),
+    ),
+    10_000,
+  );
+  await (await button('Save address')).click();
+  await waitForText('Download locations');
+  await driver.switchTo().window(popupHandle);
+  await waitForText('Daemon connected');
+  await driver.switchTo().window(optionsHandle);
   await driver.findElement(By.xpath('//label[span[text()="Dark"]]')).click();
   await waitForTheme('dark');
   assert.equal(await background(), darkBackground);
@@ -81,6 +117,10 @@ try {
     true,
   );
 
+  assert.equal(
+    await driver.findElement(By.id('daemon-address')).getProperty('value'),
+    daemon.origin,
+  );
   await driver.findElement(By.xpath('//label[span[text()="Light"]]')).click();
   await waitForTheme('light');
   assert.equal(await background(), lightBackground);
@@ -91,7 +131,9 @@ try {
   await heading('Download with Ario');
   await waitForTheme('light');
 
+  daemon.verify();
   console.log('Firefox MV3 smoke passed.');
 } finally {
   await driver.quit();
+  await daemon?.close();
 }

@@ -1,10 +1,16 @@
 import { Layers, Settings2 } from 'lucide-react';
 import { useState } from 'react';
+import { useDaemonHealth } from '@/shared/api/queries';
+import { ConnectionStatus } from '@/features/connection/connection-status';
+import { useExtensionSettings } from '@/features/settings/settings-context';
 import { openOptions } from '@/shared/browser/runtime';
 import { Button } from '@/shared/ui/button';
 import { AppHeader } from '@/shared/ui/shell';
 
 export function Popup() {
+  const { settings, ready, loadFailed } = useExtensionSettings();
+  const health = useDaemonHealth(settings.connection.origin, ready);
+  const canReconnect = health.isError || health.data?.aria2_reachable === false;
   const [settingsError, setSettingsError] = useState(false);
 
   async function showSettings() {
@@ -19,15 +25,25 @@ export function Popup() {
   return (
     <div className="flex h-full flex-col">
       <AppHeader>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          aria-label="Open settings"
-          onClick={() => void showSettings()}
-        >
-          <Settings2 aria-hidden="true" />
-        </Button>
+        <div className="flex min-w-0 items-center gap-2">
+          {ready && (
+            <ConnectionStatus
+              compact
+              checking={health.isFetching}
+              health={health.data}
+              error={health.error}
+            />
+          )}
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Open settings"
+            onClick={() => void showSettings()}
+          >
+            <Settings2 aria-hidden="true" />
+          </Button>
+        </div>
       </AppHeader>
       <div className="grid min-h-0 flex-1 grid-cols-[155px_minmax(0,1fr)] max-[580px]:grid-cols-[125px_minmax(0,1fr)] max-[340px]:grid-cols-1 max-[340px]:grid-rows-[auto_minmax(0,1fr)]">
         <aside
@@ -44,9 +60,27 @@ export function Popup() {
         </aside>
         <main className="overflow-y-auto px-[22px] py-[22px] max-[580px]:px-3.5">
           <h1>Downloads</h1>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Download management will be available once daemon support is added.
-          </p>
+          {health.error && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {health.error.message}
+            </p>
+          )}
+          {canReconnect && (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-3"
+              disabled={health.isFetching}
+              onClick={() => void health.refetch()}
+            >
+              Reconnect
+            </Button>
+          )}
+          {loadFailed && (
+            <p role="alert" className="mt-3 text-xs text-destructive">
+              Could not read extension settings.
+            </p>
+          )}
           {settingsError && (
             <p role="alert" className="mt-3 text-xs text-destructive">
               Settings could not open. Try again from the toolbar or the

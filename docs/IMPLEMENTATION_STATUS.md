@@ -2,7 +2,7 @@
 
 ## Phase 1 — Infrastructure
 
-Implemented and verified on November 18, 2026. The WXT scaffold has React, strict TypeScript, shared Tailwind and shadcn/ui styling, and separate MV3 targets for Chrome and Firefox. The popup, options, background, and confirmation entrypoints are in place. System is the default theme. Explicit Light and Dark selections persist locally and update open views. The popup and confirmation contain only the Phase 1 shell.
+Implemented and verified on November 18, 2026. The WXT scaffold has React, strict TypeScript, shared Tailwind and shadcn/ui styling, and separate MV3 targets for Chrome and Firefox. The popup, options, background, and confirmation entrypoints are in place. System is the default theme. Explicit Light and Dark selections persist locally and update open views. Phase 1 delivered placeholder popup and confirmation shells.
 
 ### Verification
 
@@ -17,8 +17,24 @@ Implemented and verified on November 18, 2026. The WXT scaffold has React, stric
 
 The CI workflow runs the checks, packages both targets, and runs both browser smoke tests. The commands passed locally. GitHub Actions has yet to run for this checkout.
 
+## Phase 2 — Daemon connection, typed client, and settings
+
+Implemented on November 18, 2026 against daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Settings can test a draft loopback HTTP address, save it across open views, and reconnect to the saved address. The popup and Settings distinguish daemon unavailability from aria2 unreachability. Settings displays the daemon’s download locations, proxy configuration and status, and available aria2 defaults as read-only information.
+
+The background accepts named health, settings, and cancellation messages from trusted extension pages. The client validates Rust JSON contracts, rejects redirects, and reports transport, HTTP, timeout, cancellation, and response failures. Versioned local settings carry forward the Phase 1 theme and store the defaults for future capture behavior.
+
+### Verification
+
+| Check                                                                  | Result                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `git diff --check` | Passed                                                                                                                                                                                                                                             |
+| `pnpm test`                                                            | 33 tests passed, covering connection success and refusal, timeout and cancellation, malformed and structured replies, aria2 failure and reconnect, loopback validation, trusted senders, storage migration and concurrent writes, and wire schemas |
+| `pnpm zip`                                                             | Built and packaged Chrome and Firefox MV3 targets                                                                                                                                                                                                  |
+| `pnpm smoke:chrome` and `pnpm smoke:firefox`                           | Passed with the loopback HTTP fixture and with a temporary Ario daemon and aria2. Chrome 157 and Firefox 160 read health and settings over `127.0.0.1`, `localhost`, and `[::1]` on ephemeral ports.                                               |
+| Settings layout                                                        | Inspected in light and dark themes at desktop and narrow widths                                                                                                                                                                                    |
+
 ### Scope and next session
 
-Phases 2–9 are pending. Begin with [Phase 2 — Daemon connection and typed client](plans/phase-02-connection.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+Phases 3–9 are pending. Capture preferences are stored with capture disabled, confirmation enabled, Main Queue, inherited settings, immediate start, and session sharing disabled. Capture behavior and controls are scheduled for later phases. The download popup reports the connection state. Queue and download schemas are available for the dashboard.
 
-Recheck the daemon source and serialized request and response types. Add the loopback connection, validated endpoint settings, named background operations for extension UI, and MSW coverage for daemon and aria2 failures. Carry the existing appearance preference forward when adding the versioned settings model.
+Begin with [Phase 3 — Download dashboard](plans/phase-03-dashboard.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).

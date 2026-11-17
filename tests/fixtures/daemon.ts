@@ -1,7 +1,8 @@
 import { http, HttpResponse } from 'msw';
+import { defaultDaemonOrigin } from '@/shared/api/endpoint';
 
-const healthUrl = 'http://127.0.0.1:47812/health';
-const health = {
+export const healthUrl = `${defaultDaemonOrigin}/health`;
+export const health = {
   server: 'ok',
   aria2_reachable: true,
   tui_managed: false,
@@ -9,8 +10,26 @@ const health = {
   active_downloads: 0,
 };
 
+export const daemonSettings = {
+  default_download_location: '/home/user/Downloads',
+  category_locations: { Video: '/home/user/Downloads/Videos' },
+  category_extensions: { Video: ['mp4'] },
+  proxy: {
+    enabled: true,
+    host: '127.0.0.1',
+    port: 8080,
+    username: 'user',
+    password: null,
+  },
+  start_daemon_on_login: false,
+  stop_daemon_on_close: false,
+};
+
 export const daemonHandlers = [
   http.get(healthUrl, () => HttpResponse.json(health)),
+  http.get(`${defaultDaemonOrigin}/settings`, () =>
+    HttpResponse.json(daemonSettings),
+  ),
 ];
 
 export const daemonOffline = http.get(healthUrl, () => HttpResponse.error());

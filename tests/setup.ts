@@ -8,11 +8,12 @@ import { daemonHandlers } from './fixtures/daemon';
 vi.stubGlobal('browser', fakeBrowser);
 vi.stubGlobal('chrome', fakeBrowser);
 
-const server = setupServer(...daemonHandlers);
+export const server = setupServer(...daemonHandlers);
 
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   fakeBrowser.reset();
   server.resetHandlers();
 });
