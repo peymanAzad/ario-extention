@@ -58,23 +58,28 @@ The capture journal stores the browser download identity, daemon origin, handoff
 
 Daemon contracts live in `common/src/`, `server/src/routes/`, `server/src/error.rs`, and `tui/src/api.rs`. The server returns bare JSON for active read routes and an empty body for some write routes. Structured application errors carry `{"result":"error","message":"…"}`. Rust enum variants use their serialized casing, and payload variants like download status `Error(String)` serialize as objects.
 
+Phase 9 packages desktop Chrome and Firefox MV3, with a separate Firefox source archive. The production manifests use a bundled-script-only CSP, disable private-window access, and include bundled icons and local fonts. Firefox discloses data passed to the local native daemon. The [setup and build guide](../README.md), [privacy notice](release/PRIVACY.md), and [store materials](release/STORE.md) cover installation, daemon compatibility, permissions, capture limits, and reviewer verification.
+
 ## Commands
 
-Use Node.js 24 LTS and pnpm 10.30.0 from `package.json`. With Corepack installed, run `corepack enable`, followed by `pnpm install --frozen-lockfile`.
+Use Node.js 24.22.3 LTS from `.nvmrc` and pnpm 10.30.0 from `package.json`. With Corepack installed, run `corepack enable`, followed by `pnpm install --frozen-lockfile`.
 
-| Command                                             | Purpose                                                    |
-| --------------------------------------------------- | ---------------------------------------------------------- |
-| `pnpm dev` / `pnpm dev:firefox`                     | Run WXT development mode in Chrome or Firefox              |
-| `pnpm typecheck`                                    | Generate WXT types and run strict TypeScript               |
-| `pnpm lint`                                         | Run ESLint                                                 |
-| `pnpm format:check` / `pnpm format`                 | Check or apply Prettier formatting                         |
-| `pnpm test`                                         | Run unit and render tests                                  |
-| `pnpm build`                                        | Produce unpacked MV3 builds for both browsers              |
-| `pnpm build:chrome` / `pnpm build:firefox`          | Build a single browser target                              |
-| `pnpm zip` / `pnpm zip:chrome` / `pnpm zip:firefox` | Build and package installable bundles under `.output/`     |
-| `pnpm smoke:chrome`                                 | Load the Chrome build as an unpacked extension in Chromium |
-| `pnpm smoke:firefox`                                | Load the Firefox ZIP as a temporary add-on                 |
+| Command                                             | Purpose                                                                     |
+| --------------------------------------------------- | --------------------------------------------------------------------------- |
+| `pnpm dev` / `pnpm dev:firefox`                     | Run WXT development mode in Chrome or Firefox                               |
+| `pnpm typecheck`                                    | Generate WXT types and run strict TypeScript                                |
+| `pnpm lint`                                         | Run ESLint                                                                  |
+| `pnpm format:check` / `pnpm format`                 | Check or apply Prettier formatting                                          |
+| `pnpm test`                                         | Run unit and render tests                                                   |
+| `pnpm build`                                        | Produce unpacked MV3 builds for both browsers                               |
+| `pnpm build:chrome` / `pnpm build:firefox`          | Build a single browser target                                               |
+| `pnpm zip` / `pnpm zip:chrome` / `pnpm zip:firefox` | Build the release bundles and matching Firefox sources under `.output/`     |
+| `python3 tests/browser/packages.py`                 | Verify release manifests, ZIP contents, bundled assets, and Firefox sources |
+| `pnpm smoke:chrome`                                 | Load the Chrome build as an unpacked extension in Chromium                  |
+| `pnpm smoke:firefox`                                | Load the Firefox ZIP as a temporary add-on                                  |
 
-For Chromium smoke testing, run `pnpm build:chrome` and `pnpm exec playwright install chromium` first. Set `CHROME_PATH` to use a recent installed Chrome or Chromium instead of Playwright’s browser. For Firefox, install Firefox and run `pnpm zip:firefox`. Selenium Manager locates geckodriver by default. Set `GECKODRIVER_PATH` to use a local executable and `FIREFOX_PATH` if Firefox is outside the usual lookup path. The harnesses use isolated profiles, run headless, and start a loopback HTTP fixture on an ephemeral port. Set `ARIO_TEST_ORIGIN` to the HTTP origin of a running Ario daemon with aria2 available to exercise the same checks against the daemon.
+For Chromium smoke testing, run `pnpm build:chrome` and `pnpm exec playwright install chromium` first. Set `CHROME_PATH` to use a recent installed Chrome or Chromium instead of Playwright’s browser. For Firefox, install Firefox and run `pnpm zip:firefox`. Selenium Manager locates geckodriver by default. Set `GECKODRIVER_PATH` to use a local executable and `FIREFOX_PATH` if Firefox is outside the usual lookup path. The harnesses use isolated profiles, run headless, and start a loopback HTTP fixture on an ephemeral port. Set `ARIO_TEST_ORIGIN` to the HTTP origin of an existing Ario daemon with aria2 available for read-only smoke checks.
+
+On Linux, set `ARIO_DAEMON_BIN` to an absolute path to a daemon executable to run live management, scheduling, and supported browser handoffs with a temporary data directory and an isolated aria2 process. The [release smoke instructions](release/STORE.md#smoke-checks) list the verified daemon revisions. GitHub Actions has a stable Chrome for Testing and Firefox fixture matrix for Linux, macOS, and Windows.
 
 For manual testing, load `.output/chrome-mv3` through Chrome’s **Load unpacked** control. In Firefox, open `about:debugging#/runtime/this-firefox`, select **Load Temporary Add-on**, and choose `.output/firefox-mv3/manifest.json`. Pin the extension or open it from the extensions menu, then use the popup’s Settings button to set the daemon address or change the theme.

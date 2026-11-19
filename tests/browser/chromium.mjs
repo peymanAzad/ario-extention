@@ -7,6 +7,11 @@ import { chromium } from 'playwright';
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
 import { openSmokeConfirmation, smokeLink } from './confirmation.mjs';
 import { startTestDaemon } from './daemon.mjs';
+import {
+  setFormValue,
+  verifyTransfer,
+  verifyLiveManagement,
+} from './live-workflows.mjs';
 
 const { directory, manifest } = await readBuild('chrome');
 assert.equal(manifest.background.service_worker, 'background.js');
@@ -116,6 +121,57 @@ try {
 
   await popup.bringToFront();
   await popup.setViewportSize({ width: 780, height: 580 });
+  await mkdir('test-results', { recursive: true });
+  if (daemon.fixture) {
+    await options.setViewportSize({ width: 900, height: 1020 });
+    await options.evaluate(() => globalThis.scrollTo(0, 0));
+    await options.screenshot({
+      path: 'test-results/settings-chrome-light.png',
+    });
+    await options.setViewportSize({ width: 320, height: 650 });
+    assert.equal(
+      await options.locator('body').evaluate((body) => body.scrollWidth),
+      320,
+    );
+  }
+  if (daemon.live) {
+    const record = await verifyLiveManagement(daemon, {
+      click: (selector) => popup.locator(selector).click(),
+      button: (name) =>
+        popup.getByRole('button', { name, exact: true }).click(),
+      text: (text) => popup.getByText(text, { exact: true }).waitFor(),
+      fill: async (selector, value) => {
+        await popup.locator(selector).first().waitFor();
+        await popup.evaluate(setFormValue, { selector, value });
+      },
+    });
+    const opener = popup.getByRole('button', {
+      name: `Download details for ${record.filename || record.url}`,
+      exact: true,
+    });
+    await opener.focus();
+    await popup.keyboard.press('Enter');
+    await popup.getByRole('button', { name: 'Copy URL' }).click();
+    await popup.getByText('URL copied.').waitFor();
+    await popup.getByRole('button', { name: 'Copy path' }).click();
+    await popup.getByText('Path copied.').waitFor();
+    await popup.keyboard.press('Escape');
+    await popup.waitForFunction(() =>
+      document.activeElement
+        ?.getAttribute('aria-label')
+        ?.startsWith('Download details for '),
+    );
+    if (!daemon.handoff) {
+      await options
+        .getByText('Upgrade the Ario daemon to enable browser downloads.')
+        .waitFor();
+      assert.ok(
+        await options
+          .getByRole('switch', { name: 'Capture browser downloads' })
+          .isDisabled(),
+      );
+    }
+  }
   if (daemon.fixture) {
     await popup
       .getByRole('article', { name: 'Movie.mp4', exact: true })
@@ -126,6 +182,15 @@ try {
         .getAttribute('aria-valuenow'),
       '50',
     );
+    for (const percent of [22, 70, 94]) {
+      daemon.setProgress(percent);
+      await popup
+        .locator(
+          `[aria-label="Movie.mp4 progress"][aria-valuenow="${percent}"]`,
+        )
+        .waitFor();
+    }
+    daemon.setProgress(50);
     assert.equal(
       await popup
         .getByRole('progressbar', {
@@ -161,7 +226,9 @@ try {
     await popup.keyboard.press('End');
     await popup.keyboard.press('Home');
     assert.equal(await region.evaluate((element) => element.scrollTop), 0);
-    await mkdir('test-results', { recursive: true });
+    await popup.getByLabel('Sort downloads').selectOption('CreatedAt');
+    await popup.getByRole('searchbox').focus();
+    await popup.getByRole('searchbox').blur();
     await popup.screenshot({ path: 'test-results/dashboard-chrome-light.png' });
     await popup.evaluate(
       () => (document.documentElement.dataset.appearance = 'dark'),
@@ -178,9 +245,11 @@ try {
     await popup.getByRole('tab', { name: 'Schedule' }).click();
     await popup.getByRole('switch', { name: 'Enable queue schedule' }).check();
     await popup.getByLabel('Repeat').selectOption('weekly');
+    await popup.getByRole('button', { name: 'Friday' }).click();
     await popup.getByLabel('Start time', { exact: true }).fill('22:00');
     await popup.getByLabel('Stop time', { exact: true }).fill('02:00');
     await popup.getByText('The queue stops the following day.').waitFor();
+    await popup.getByLabel('Stop time', { exact: true }).blur();
     await popup.evaluate(
       () => (document.documentElement.dataset.appearance = 'dark'),
     );
@@ -269,6 +338,20 @@ try {
   await popup.goto(`${origin}/confirmation.html`);
   await popup.getByRole('heading', { name: 'Download with Ario' }).waitFor();
 
+  if (daemon.handoff) {
+    const link = `${daemon.sourceOrigin}/capture-files/context-menu`;
+    const opened = context.waitForEvent('page');
+    await popup.evaluate(openSmokeConfirmation, {
+      origin: daemon.origin,
+      link,
+    });
+    const confirmation = await opened;
+    await confirmation.getByRole('button', { name: 'Start now' }).click();
+    await confirmation.getByText('Added to Ario.').waitFor();
+    await verifyTransfer(daemon, link);
+    await confirmation.getByRole('button', { name: 'Close' }).click();
+  }
+
   if (daemon.fixture) {
     const opened = context.waitForEvent('page');
     await popup.evaluate(openSmokeConfirmation, {
@@ -350,6 +433,10 @@ try {
       },
     );
     await privateConfirmation.getByRole('button', { name: 'Close' }).click();
+  }
+
+  if (daemon.fixture || daemon.handoff) {
+    const source = await context.newPage();
     // Headless Chrome cannot accept the native optional extension permission
     // dialog. Exercise capture with an isolated copy granted access at install.
     captureBuild = await mkdtemp(join(tmpdir(), 'ario-capture-chrome-'));
@@ -394,7 +481,9 @@ try {
         document.querySelector('[aria-label="Capture browser downloads"]')
           .checked,
     );
-    await source.goto(`${daemon.origin}/capture-fixture`);
+    await source.goto(
+      `${daemon.sourceOrigin ?? daemon.origin}/capture-fixture`,
+    );
 
     const captureWindow = async (link) => {
       const opened = context.waitForEvent('page', { timeout: 7000 });
@@ -413,81 +502,108 @@ try {
     await kept.getByRole('button', { name: 'Close' }).click();
     const closedCapture = await captureWindow('#capture-close');
     await closedCapture.close();
-    const asked = await captureWindow('#capture-ask');
-    await asked.setViewportSize({ width: 500, height: 600 });
-    await asked.screenshot({ path: 'test-results/capture-chrome-dark.png' });
-    await asked.getByLabel('Queue', { exact: true }).selectOption('2');
-    await asked.getByRole('checkbox', { name: /Don’t show me again/ }).check();
-    await asked.getByRole('button', { name: 'Save for later' }).click();
-    await asked.getByText('Added to Ario.').waitFor({ timeout: 10_000 });
-    await asked.getByRole('button', { name: 'Close' }).click();
-    assert.equal(
-      await captureOptions
-        .getByRole('switch', { name: 'Ask before downloading' })
-        .isChecked(),
-      false,
-    );
-    await captureOptions
-      .getByRole('switch', { name: 'Use browser session' })
-      .click();
-    await captureOptions.waitForFunction(
-      () =>
-        document.querySelector('[aria-label="Use browser session"]').checked,
-    );
-    await source.locator('#capture-automatic').click();
-    for (
-      let attempt = 0;
-      attempt < 70 && daemon.captureHandoffs()[1]?.state !== 'committed';
-      attempt++
-    )
-      await delay(100);
-    const captures = daemon.captureHandoffs();
-    assert.deepEqual(
-      captures.map(({ payload, state }) => [
-        payload.url,
-        payload.queue_id,
-        payload.start_immediately,
-        payload.session,
-        state,
-      ]),
-      [
-        [
-          `${daemon.origin}/capture-files/ask`,
-          2,
-          false,
-          undefined,
-          'committed',
-        ],
-        [
-          `${daemon.origin}/capture-files/cookie?signature=x%2Fz%2B`,
-          1,
-          true,
-          {
-            cookie: 'capture_session=fixture',
-            referrer: `${daemon.origin}/capture-fixture`,
-          },
-          'committed',
-        ],
-      ],
-    );
-    await source.locator('#capture-post').click();
-    await captureOptions.waitForFunction(async () => {
-      const downloads = await globalThis.chrome.downloads.search({});
-      return (
-        ['/keep', '/post', '/close'].every((suffix) =>
-          downloads.some(
-            ({ url, state }) => url.endsWith(suffix) && state === 'complete',
-          ),
-        ) &&
-        downloads.some(
-          ({ url, error, state }) =>
-            url.endsWith('/ask') &&
-            state === 'interrupted' &&
-            error === 'USER_CANCELED',
-        )
+    if (daemon.handoff) {
+      await captureOptions.waitForFunction(async () => {
+        const downloads = await globalThis.chrome.downloads.search({
+          state: 'complete',
+        });
+        return ['keep', 'close'].every((file) =>
+          downloads.some(({ url }) => url.endsWith(`/capture-files/${file}`)),
+        );
+      });
+      const captured = await captureWindow('#capture-live');
+      await captured.getByRole('button', { name: 'Start now' }).click();
+      await captured.getByText('Added to Ario.').waitFor();
+      await verifyTransfer(daemon, `${daemon.sourceOrigin}/capture-files/live`);
+      await captured.getByRole('button', { name: 'Close' }).click();
+      await captureOptions.waitForFunction(async () => {
+        const downloads = await globalThis.chrome.downloads.search({
+          state: 'interrupted',
+        });
+        return downloads.some(
+          ({ url, error }) =>
+            url.endsWith('/capture-files/live') && error === 'USER_CANCELED',
+        );
+      });
+    } else {
+      const asked = await captureWindow('#capture-ask');
+      await asked.setViewportSize({ width: 500, height: 600 });
+      await asked.screenshot({ path: 'test-results/capture-chrome-dark.png' });
+      await asked.getByLabel('Queue', { exact: true }).selectOption('2');
+      await asked
+        .getByRole('checkbox', { name: /Don’t show me again/ })
+        .check();
+      await asked.getByRole('button', { name: 'Save for later' }).click();
+      await asked.getByText('Added to Ario.').waitFor({ timeout: 10_000 });
+      await asked.getByRole('button', { name: 'Close' }).click();
+      assert.equal(
+        await captureOptions
+          .getByRole('switch', { name: 'Ask before downloading' })
+          .isChecked(),
+        false,
       );
-    });
-    assert.equal(daemon.captureHandoffs().length, 2);
+      await captureOptions
+        .getByRole('switch', { name: 'Use browser session' })
+        .click();
+      await captureOptions.waitForFunction(
+        () =>
+          document.querySelector('[aria-label="Use browser session"]').checked,
+      );
+      await source.locator('#capture-automatic').click();
+      for (
+        let attempt = 0;
+        attempt < 70 && daemon.captureHandoffs()[1]?.state !== 'committed';
+        attempt++
+      )
+        await delay(100);
+      const captures = daemon.captureHandoffs();
+      assert.deepEqual(
+        captures.map(({ payload, state }) => [
+          payload.url,
+          payload.queue_id,
+          payload.start_immediately,
+          payload.session,
+          state,
+        ]),
+        [
+          [
+            `${daemon.origin}/capture-files/ask`,
+            2,
+            false,
+            undefined,
+            'committed',
+          ],
+          [
+            `${daemon.origin}/capture-files/cookie?signature=x%2Fz%2B`,
+            1,
+            true,
+            {
+              cookie: 'capture_session=fixture',
+              referrer: `${daemon.origin}/capture-fixture`,
+            },
+            'committed',
+          ],
+        ],
+      );
+      await source.locator('#capture-post').click();
+      await captureOptions.waitForFunction(async () => {
+        const downloads = await globalThis.chrome.downloads.search({});
+        return (
+          ['/keep', '/post', '/close'].every((suffix) =>
+            downloads.some(
+              ({ url, state }) => url.endsWith(suffix) && state === 'complete',
+            ),
+          ) &&
+          downloads.some(
+            ({ url, error, state }) =>
+              url.endsWith('/ask') &&
+              state === 'interrupted' &&
+              error === 'USER_CANCELED',
+          )
+        );
+      });
+      assert.equal(daemon.captureHandoffs().length, 2);
+    }
     await enable.click();
     await captureOptions.waitForFunction(
       () =>

@@ -5,6 +5,7 @@ import { URL } from 'node:url';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { smokeMagnet } from './confirmation.mjs';
+import { startLiveDaemon } from './live-daemon.mjs';
 
 export async function startTestDaemon() {
   if (process.env.ARIO_TEST_ORIGIN) {
@@ -20,6 +21,7 @@ export async function startTestDaemon() {
   const handoffs = new Map();
   let offline = false;
   let large = false;
+  let progress = 524288;
   const health = {
     server: 'ok',
     aria2_reachable: true,
@@ -121,7 +123,7 @@ export async function startTestDaemon() {
         started_at: null,
         completed_at: null,
       },
-      completed_length: 524288,
+      completed_length: index === 0 ? progress : 524288,
       download_speed: index % 7 === 0 ? 524288 : 0,
       eta_seconds: index % 7 === 0 ? 1 : null,
     };
@@ -142,6 +144,7 @@ export async function startTestDaemon() {
         <a id="capture-ask" href="/capture-files/ask">Ask test</a>
         <a id="capture-close" href="/capture-files/close">Close test</a>
         <a id="capture-revoke" href="/capture-files/revoke">Revoke test</a>
+        <a id="capture-live" href="/capture-files/live">Live handoff test</a>
         <a id="capture-automatic" href="/capture-go">Automatic test</a>
         <form method="POST" action="/capture-files/post"><button id="capture-post">POST test</button></form>`);
       return;
@@ -190,7 +193,8 @@ export async function startTestDaemon() {
       });
       response.end(
         `<a id="magnet-link" href="${smokeMagnet.replaceAll('&', '&amp;')}">Fixture torrent</a>
-        <a id="private-link" href="/private/credentialed.zip">Credentialed file</a>`,
+        <a id="private-link" href="/private/credentialed.zip">Credentialed file</a>
+        <a id="live-link" href="/capture-files/context-menu">Live context-menu test</a>`,
       );
       return;
     }
@@ -260,14 +264,40 @@ export async function startTestDaemon() {
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
 
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const close = async () => {
+    await new Promise((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  };
+  if (process.env.ARIO_DAEMON_BIN) {
+    try {
+      const live = await startLiveDaemon(process.env.ARIO_DAEMON_BIN);
+      return {
+        ...live,
+        sourceOrigin: origin,
+        verify() {},
+        async close() {
+          await Promise.all([live.close(), close()]);
+        },
+      };
+    } catch (error) {
+      await close();
+      throw error;
+    }
+  }
+
   return {
-    origin: `http://127.0.0.1:${server.address().port}`,
+    origin,
     fixture: true,
     setOffline(value) {
       offline = value;
     },
     setLarge(value) {
       large = value;
+    },
+    setProgress(percent) {
+      progress = Math.ceil((percent * 1048576) / 100);
     },
     downloadRequests() {
       return counts.get('/downloads') ?? 0;
@@ -296,10 +326,6 @@ export async function startTestDaemon() {
         ]),
       );
     },
-    async close() {
-      await new Promise((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
-    },
+    close,
   };
 }

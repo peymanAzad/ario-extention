@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source('../..');
 
 @custom-variant dark {
   &:where([data-appearance='dark'] *) {
@@ -206,8 +206,9 @@
   letter-spacing: 0;
 }
 .download-list {
+  --download-row-height: 96px;
   flex: 1;
-  min-height: 112px;
+  min-height: var(--download-row-height);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -215,8 +216,8 @@
 .download-row {
   display: flex;
   gap: 11px;
-  height: 112px;
-  padding: 13px 0;
+  height: 100%;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
 .download-file-icon {
@@ -291,6 +292,9 @@
   }
   .dashboard-search {
     flex-basis: 100%;
+  }
+  .download-list {
+    --download-row-height: 112px;
   }
   .download-file-icon {
     display: none;

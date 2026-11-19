@@ -158,7 +158,6 @@ function DownloadRow({
   );
 }
 
-const rowHeight = 112;
 const overscan = 3;
 
 // Fixed row heights keep DOM work bounded even for thousands of downloads.
@@ -173,12 +172,24 @@ export function DownloadList({
   controls: RowControls;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(300);
+  const [{ height, rowHeight }, setDimensions] = useState({
+    height: 300,
+    rowHeight: 96,
+  });
   const [scrollTop, setScrollTop] = useState(0);
   useEffect(() => {
     const element = viewport.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => setHeight(element.clientHeight));
+    const measure = () => {
+      const height = element.clientHeight;
+      if (!height) return;
+      const rowHeight = Number.parseFloat(
+        getComputedStyle(element).getPropertyValue('--download-row-height'),
+      );
+      setDimensions({ height, rowHeight: rowHeight || 96 });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);

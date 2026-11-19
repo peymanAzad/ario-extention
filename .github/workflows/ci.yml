@@ -23,8 +23,43 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm zip
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: python3 tests/browser/packages.py
+      - name: Rebuild Firefox from its source archive
+        run: |
+          source_dir=$(mktemp -d "$RUNNER_TEMP/ario-source.XXXXXX")
+          unzip -q .output/*-firefox-sources.zip -d "$source_dir"
+          pnpm --dir "$source_dir" install --frozen-lockfile
+          pnpm --dir "$source_dir" zip:firefox
+          diff -qr .output/firefox-mv3 "$source_dir/.output/firefox-mv3"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ario-extension-packages
+          path: .output/*.zip
+          include-hidden-files: true
+          if-no-files-found: error
+
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm zip
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          install-dependencies: ${{ runner.os == 'Linux' }}
       - run: pnpm smoke:chrome
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - uses: browser-actions/setup-firefox@v1
         id: firefox
       - run: pnpm smoke:firefox

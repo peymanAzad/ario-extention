@@ -76,7 +76,7 @@ export function CaptureSettings({
       </h2>
       <CaptureSwitch
         label="Capture browser downloads"
-        description="Send supported downloads to the local Ario daemon."
+        description="Observe recent HTTP(S) requests to match browser downloads and send supported download URLs and file details to the local Ario daemon."
         checked={preferences.enabled}
         disabled={!ready || busy || (!preferences.enabled && !canEnable)}
         onChange={(enabled) => {

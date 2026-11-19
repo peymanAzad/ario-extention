@@ -28,3 +28,8 @@ Phases 1–8 deliver the extension shell, appearance and connection settings, re
 - Native daemon launch and shutdown remain TUI workflows. The extension leaves the daemon running after the UI closes.
 - Opening or revealing local files and folders stays native. Download details offers a copyable destination folder path.
 - Daemon configuration writes, remote connections, and mobile browser support are outside the planned extension scope.
+- The extension is unavailable in private browser windows. Automatic capture depends on browser observations and pause/resume support. Unsupported transfers stay in the browser. The [capture limitations](release/STORE.md#capture-limitations) cover signed links, session sharing, and history recovery.
+
+## Phase 9 parity audit
+
+Compared the management routes with the TUI API and the browser handoff routes at daemon commit `640cc1c`. The extension uses the existing daemon endpoints for queue and download mutations. The daemon executes schedules and event commands. Recurring schedule fields follow the daemon timezone when reported. Terminal pane shortcuts, native file/folder actions, and daemon lifecycle controls are TUI-specific. Browser checks and their platform coverage are recorded in [implementation status](IMPLEMENTATION_STATUS.md#phase-9--cross-browser-verification-and-release-preparation).

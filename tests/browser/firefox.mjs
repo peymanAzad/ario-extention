@@ -10,6 +10,11 @@ import app from '../../package.json' with { type: 'json' };
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
 import { smokeMagnet } from './confirmation.mjs';
 import { startTestDaemon } from './daemon.mjs';
+import {
+  setFormValue,
+  verifyTransfer,
+  verifyLiveManagement,
+} from './live-workflows.mjs';
 
 const { manifest } = await readBuild('firefox');
 assert.deepEqual(manifest.background.scripts, ['background.js']);
@@ -68,6 +73,40 @@ try {
 
   await driver.get(`${origin}/popup.html`);
   await heading('Downloads');
+  assert.equal(
+    await background(),
+    (await driver.executeScript(
+      'return matchMedia("(prefers-color-scheme: dark)").matches',
+    ))
+      ? darkBackground
+      : lightBackground,
+  );
+  const popupError = await driver.executeAsyncScript((done) => {
+    globalThis.browser.action.openPopup().then(
+      () => done(null),
+      (error) => done(error.message),
+    );
+  });
+  assert.equal(popupError, null);
+  const popupSize = await driver.wait(
+    () =>
+      driver.executeScript(() => {
+        const [view] = globalThis.browser.extension.getViews({ type: 'popup' });
+        if (view?.document.querySelector('h1')?.textContent !== 'Downloads')
+          return null;
+        const { clientWidth, clientHeight, scrollWidth } = view.document.body;
+        return { clientWidth, clientHeight, scrollWidth };
+      }),
+    10_000,
+    'Expected the native Firefox toolbar popup',
+  );
+  // Firefox's Extensions menu can constrain an unpinned action to 300px.
+  assert.ok(popupSize.clientWidth >= 300 && popupSize.clientWidth <= 780);
+  assert.ok(popupSize.clientHeight > 0 && popupSize.clientHeight <= 580);
+  assert.equal(popupSize.scrollWidth, popupSize.clientWidth);
+  await driver.executeScript(() =>
+    globalThis.browser.extension.getViews({ type: 'popup' })[0].close(),
+  );
   const popupHandle = await driver.getWindowHandle();
   await driver
     .findElement(By.css('button[aria-label="Open settings"]'))
@@ -86,7 +125,10 @@ try {
 
   const address = await driver.findElement(By.id('daemon-address'));
   const button = (name) =>
-    driver.findElement(By.xpath(`//button[text()="${name}"]`));
+    driver.wait(
+      until.elementLocated(By.xpath(`//button[normalize-space(.)="${name}"]`)),
+      10_000,
+    );
   const waitForText = (text) =>
     driver.wait(
       until.elementLocated(By.xpath(`//*[text()="${text}"]`)),
@@ -142,6 +184,61 @@ try {
   await driver.switchTo().window(popupHandle);
   await waitForTheme('light');
   assert.equal(await background(), lightBackground);
+  if (daemon.live) {
+    const record = await verifyLiveManagement(daemon, {
+      click: async (selector) => {
+        const element = await driver.wait(
+          until.elementLocated(By.css(selector)),
+          10_000,
+        );
+        await driver.wait(until.elementIsEnabled(element), 10_000);
+        await element.click();
+      },
+      button: async (name) => {
+        const element = await button(name);
+        await driver.wait(until.elementIsEnabled(element), 10_000);
+        await element.click();
+      },
+      text: waitForText,
+      fill: async (selector, value) => {
+        const element = await driver.wait(
+          until.elementLocated(By.css(selector)),
+          10_000,
+        );
+        await driver.wait(until.elementIsEnabled(element), 10_000);
+        await driver.executeScript(setFormValue, { selector, value });
+      },
+    });
+    const details = `Download details for ${record.filename || record.url}`;
+    const opener = await driver.wait(
+      until.elementLocated(By.css(`[aria-label="${details}"]`)),
+      10_000,
+    );
+    await opener.sendKeys(Key.ENTER);
+    await (await button('Copy URL')).click();
+    await waitForText('URL copied.');
+    await (await button('Copy path')).click();
+    await waitForText('Path copied.');
+    await driver.actions().sendKeys(Key.ESCAPE).perform();
+    await driver.wait(
+      async () =>
+        (await driver.switchTo().activeElement())
+          .getAttribute('aria-label')
+          .then((label) => label === details),
+      10_000,
+    );
+    if (!daemon.handoff) {
+      await driver.switchTo().window(optionsHandle);
+      await waitForText('Upgrade the Ario daemon to enable browser downloads.');
+      assert.equal(
+        await driver
+          .findElement(By.css('[aria-label="Capture browser downloads"]'))
+          .isEnabled(),
+        false,
+      );
+      await driver.switchTo().window(popupHandle);
+    }
+  }
   if (daemon.fixture) {
     const click = (selector) => driver.findElement(By.css(selector)).click();
     await waitForText('Movie.mp4');
@@ -151,6 +248,18 @@ try {
         .getAttribute('aria-valuenow'),
       '50',
     );
+    for (const percent of [22, 70, 94]) {
+      daemon.setProgress(percent);
+      await driver.wait(
+        until.elementLocated(
+          By.css(
+            `[aria-label="Movie.mp4 progress"][aria-valuenow="${percent}"]`,
+          ),
+        ),
+        10_000,
+      );
+    }
+    daemon.setProgress(50);
     await click('button[aria-label="Night shift · Paused"]');
     await click(
       'select[aria-label="Filter download status"] option[value="Error"]',
@@ -263,31 +372,79 @@ try {
   await heading('Download with Ario');
   await waitForTheme('light');
 
-  if (daemon.fixture) {
-    await driver.get(`${daemon.origin}/browser-handoff-fixture`);
-    async function openLink(id) {
-      await driver
-        .actions()
-        .contextClick(await driver.findElement(By.id(id)))
-        .perform();
-      await driver.setContext(firefox.Context.CHROME);
-      try {
-        const menuItem = await driver.wait(
-          until.elementLocated(
-            By.css(
-              '#contentAreaContextMenu menuitem[label="Download with Ario"]',
-            ),
+  async function openLink(id) {
+    await driver
+      .actions()
+      .contextClick(await driver.findElement(By.id(id)))
+      .perform();
+    await driver.setContext(firefox.Context.CHROME);
+    try {
+      const menuItem = await driver.wait(
+        until.elementLocated(
+          By.css(
+            '#contentAreaContextMenu menuitem[label="Download with Ario"]',
           ),
-          10_000,
-          `Expected the native Ario menu for ${id}`,
-        );
-        await driver.executeScript(
-          'arguments[0].doCommand(); document.getElementById("contentAreaContextMenu").hidePopup();',
-          menuItem,
-        );
-      } finally {
-        await driver.setContext(firefox.Context.CONTENT);
-      }
+        ),
+        10_000,
+        `Expected the native Ario menu for ${id}`,
+      );
+      await driver.executeScript(
+        'arguments[0].doCommand(); document.getElementById("contentAreaContextMenu").hidePopup();',
+        menuItem,
+      );
+    } finally {
+      await driver.setContext(firefox.Context.CONTENT);
+    }
+    const handle = await driver.wait(
+      async () =>
+        (await driver.getAllWindowHandles()).find(
+          (candidate) =>
+            candidate !== popupHandle && candidate !== optionsHandle,
+        ),
+      10_000,
+      `Expected a confirmation window for ${id}`,
+    );
+    await driver.switchTo().window(handle);
+    await heading('Download with Ario');
+    assert.match(
+      await driver.getCurrentUrl(),
+      /\/confirmation\.html#[\da-f-]{36}$/,
+    );
+    return handle;
+  }
+  async function closeConfirmation(handle) {
+    await (await button('Close')).click();
+    await driver.wait(
+      async () => !(await driver.getAllWindowHandles()).includes(handle),
+      10_000,
+      'Expected the confirmation window to close',
+    );
+    await driver.switchTo().window(popupHandle);
+  }
+
+  if (daemon.handoff) {
+    const source = daemon.sourceOrigin;
+    await driver.get(`${source}/browser-handoff-fixture`);
+    const handle = await openLink('live-link');
+    const start = await button('Start now');
+    await driver.wait(until.elementIsEnabled(start), 10_000);
+    await start.click();
+    await waitForText('Added to Ario.');
+    await verifyTransfer(daemon, `${source}/capture-files/context-menu`);
+    await closeConfirmation(handle);
+
+    await driver.switchTo().window(optionsHandle);
+    const enable = await driver.findElement(
+      By.css('[aria-label="Capture browser downloads"]'),
+    );
+    await driver.wait(until.elementIsEnabled(enable), 10_000);
+    await enable.click();
+    await driver.wait(() => enable.isSelected(), 10_000);
+    await driver.switchTo().window(popupHandle);
+    await driver.get(`${source}/capture-fixture`);
+
+    async function captureWindow(id) {
+      await driver.findElement(By.id(id)).click();
       const handle = await driver.wait(
         async () =>
           (await driver.getAllWindowHandles()).find(
@@ -295,26 +452,46 @@ try {
               candidate !== popupHandle && candidate !== optionsHandle,
           ),
         10_000,
-        `Expected a confirmation window for ${id}`,
       );
       await driver.switchTo().window(handle);
       await heading('Download with Ario');
-      assert.match(
-        await driver.getCurrentUrl(),
-        /\/confirmation\.html#[\da-f-]{36}$/,
-      );
       return handle;
     }
-    async function closeConfirmation(handle) {
-      await (await button('Close')).click();
-      await driver.wait(
-        async () => !(await driver.getAllWindowHandles()).includes(handle),
-        10_000,
-        'Expected the confirmation window to close',
-      );
-      await driver.switchTo().window(popupHandle);
-    }
+    const kept = await captureWindow('capture-keep');
+    await (await button('Keep in browser')).click();
+    await waitForText('The download is continuing in your browser.');
+    await closeConfirmation(kept);
+    const captured = await captureWindow('capture-live');
+    const submit = await button('Start now');
+    await driver.wait(until.elementIsEnabled(submit), 10_000);
+    await submit.click();
+    await waitForText('Added to Ario.');
+    await verifyTransfer(daemon, `${source}/capture-files/live`);
+    await closeConfirmation(captured);
+    await driver.switchTo().window(optionsHandle);
+    await driver.wait(
+      async () =>
+        driver.executeAsyncScript(async (done) => {
+          const downloads = await globalThis.browser.downloads.search({});
+          done(
+            downloads.some(
+              ({ url, state }) =>
+                url.endsWith('/capture-files/keep') && state === 'complete',
+            ) &&
+              downloads.some(
+                ({ url, state, error }) =>
+                  url.endsWith('/capture-files/live') &&
+                  state === 'interrupted' &&
+                  error === 'USER_CANCELED',
+              ),
+          );
+        }),
+      10_000,
+    );
+  }
 
+  if (daemon.fixture) {
+    await driver.get(`${daemon.origin}/browser-handoff-fixture`);
     const confirmationHandle = await openLink('magnet-link');
     await waitForText('Fixture torrent');
     await waitForTheme('light');
