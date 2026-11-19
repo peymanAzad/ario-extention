@@ -180,6 +180,31 @@ try {
       await driver.takeScreenshot(),
       'base64',
     );
+    await click('#manage-queues');
+    await click('button[aria-label="Edit Night shift"]');
+    await heading('Night shift');
+    await click('[role="tab"][aria-controls$="-schedule"]');
+    await click('input[aria-label="Enable queue schedule"]');
+    await driver.manage().window().setRect({ width: 450, height: 390 });
+    await driver.wait(
+      async () =>
+        driver.executeScript(`
+        const pane = document.querySelector('.queue-pane');
+        const save = document.querySelector('.queue-footer button[type=submit]');
+        return pane.scrollHeight > pane.clientHeight &&
+          pane.scrollWidth === pane.clientWidth &&
+          save.getBoundingClientRect().bottom <= innerHeight;
+      `),
+      10_000,
+    );
+    await writeFile(
+      'test-results/queue-firefox-dark.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+    await (await button('Cancel')).click();
+    await click('button[aria-label="Back to downloads"]');
+    await driver.manage().window().setRect({ width: 900, height: 800 });
     daemon.setOffline(true);
     await waitForText('Live updates interrupted · showing last known data');
     assert.ok((await driver.findElements(By.css('article'))).length > 0);

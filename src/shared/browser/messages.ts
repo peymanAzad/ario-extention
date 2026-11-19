@@ -46,6 +46,7 @@ type DaemonRead =
   | 'daemon.settings'
   | 'daemon.downloads'
   | 'daemon.queues'
+  | 'daemon.queue'
   | 'daemon.download';
 
 async function daemonRequest<K extends DaemonRead>(
@@ -102,6 +103,13 @@ export const getQueues = (origin: string, signal?: AbortSignal) =>
     signal,
   );
 
+export const getQueue = (origin: string, id: number, signal?: AbortSignal) =>
+  daemonRequest(
+    'daemon.queue',
+    { origin, id, requestId: crypto.randomUUID() },
+    signal,
+  );
+
 export const saveDashboardFilters = (filters: DashboardFilters) =>
   send('dashboard.update', { filters });
 
@@ -116,8 +124,9 @@ export const saveDownloadDraft = (draft: DownloadDraft) =>
   send('downloadDraft.update', { draft });
 
 type DownloadWrite = Extract<Operation, `daemon.download.${string}`>;
+type QueueWrite = Extract<Operation, `daemon.queue.${string}`>;
 
-export function writeDownload<K extends DownloadWrite>(
+function daemonWrite<K extends DownloadWrite | QueueWrite>(
   operation: K,
   payload: Omit<Payloads[K], 'requestId'>,
 ) {
@@ -126,6 +135,18 @@ export function writeDownload<K extends DownloadWrite>(
     requestId: crypto.randomUUID(),
   } as Payloads[K]);
 }
+
+export function writeDownload<K extends DownloadWrite>(
+  operation: K,
+  payload: Omit<Payloads[K], 'requestId'>,
+) {
+  return daemonWrite(operation, payload);
+}
+
+export const writeQueue = <K extends QueueWrite>(
+  operation: K,
+  payload: Omit<Payloads[K], 'requestId'>,
+) => daemonWrite(operation, payload);
 
 export async function uploadTorrent(
   origin: string,

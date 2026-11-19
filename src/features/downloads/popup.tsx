@@ -7,6 +7,7 @@ import {
   Plus,
   Search,
   Settings2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +20,8 @@ import {
 import { writeDownload } from '@/shared/browser/messages';
 import type { DownloadLiveStatus } from '@/shared/types/daemon';
 import { ConnectionStatus } from '@/features/connection/connection-status';
+import { QueueEditor } from '@/features/queues/queue-editor';
+import { QueueManager } from '@/features/queues/queue-manager';
 import { useExtensionSettings } from '@/features/settings/settings-context';
 import { openOptions } from '@/shared/browser/runtime';
 import {
@@ -48,6 +51,10 @@ type Workflow =
   | { name: 'add'; initialQueueId: number | null }
   | { name: 'details'; id: number; filename: string }
   | { name: 'clear'; queueId: number | null; queueName: string };
+
+type QueueView =
+  | { name: 'manage' }
+  | { name: 'editor'; id: number | null; fromManager: boolean };
 
 export function Popup() {
   const { settings, ready, loadFailed } = useExtensionSettings();
@@ -80,6 +87,7 @@ function Dashboard({
   const { filters, update, ready: filtersReady } = dashboard;
   const [settingsError, setSettingsError] = useState(false);
   const [workflow, setWorkflow] = useState<Workflow>();
+  const [queueView, setQueueView] = useState<QueueView>();
   const [notice, setNotice] = useState<{ message: string; error?: boolean }>();
   const [acting, setActing] = useState(new Set<number>());
   const actionLocks = useRef(new Set<number>());
@@ -132,6 +140,7 @@ function Dashboard({
     (queue) => queue.id === effectiveFilters.queueId,
   );
   const unavailable = !health.data || health.isError;
+  const queuesUnavailable = unavailable || !queues.data || queues.isError;
   const canClear =
     !unavailable &&
     !downloads.isError &&
@@ -223,6 +232,59 @@ function Dashboard({
   const navClass = (selected: boolean) =>
     `dashboard-nav ${selected ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:bg-accent'}`;
 
+  function closeQueues() {
+    const directCreate = queueView?.name === 'editor' && !queueView.fromManager;
+    setQueueView(undefined);
+    window.requestAnimationFrame(() =>
+      document
+        .getElementById(directCreate ? 'create-queue' : 'manage-queues')
+        ?.focus(),
+    );
+  }
+
+  if (queueView?.name === 'manage') {
+    return (
+      <QueueManager
+        origin={origin}
+        queues={sortedQueues}
+        unavailable={queuesUnavailable}
+        onClose={closeQueues}
+        onEdit={(id) => setQueueView({ name: 'editor', id, fromManager: true })}
+        onCreate={() =>
+          setQueueView({ name: 'editor', id: null, fromManager: true })
+        }
+      />
+    );
+  }
+
+  if (queueView?.name === 'editor') {
+    return (
+      <QueueEditor
+        origin={origin}
+        id={queueView.id}
+        visible={enabled}
+        unavailable={queuesUnavailable}
+        downloads={downloads.data}
+        downloadsUnavailable={downloads.isError}
+        backLabel={
+          queueView.fromManager
+            ? 'Back to queue management'
+            : 'Back to downloads'
+        }
+        onBack={
+          queueView.fromManager
+            ? () => setQueueView({ name: 'manage' })
+            : closeQueues
+        }
+        onClose={closeQueues}
+        onSaved={(message) => {
+          closeQueues();
+          setNotice({ message });
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <AppHeader>
@@ -281,7 +343,30 @@ function Dashboard({
             })}
           </fieldset>
           <fieldset disabled={!filtersReady} className="mt-6 min-w-0">
-            <legend className="dashboard-section-label">Queues</legend>
+            <legend className="dashboard-section-label w-full">
+              <span className="flex items-center justify-between gap-1">
+                Queues
+                <Button
+                  id="create-queue"
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-5 [&_svg]:size-3.5"
+                  aria-label="Create queue"
+                  disabled={queuesUnavailable}
+                  onClick={() => {
+                    setNotice(undefined);
+                    setQueueView({
+                      name: 'editor',
+                      id: null,
+                      fromManager: false,
+                    });
+                  }}
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+              </span>
+            </legend>
             <button
               type="button"
               aria-pressed={effectiveFilters.queueId === null}
@@ -314,6 +399,19 @@ function Dashboard({
                 {queues.error ? 'Queues unavailable' : 'Loading queues…'}
               </p>
             )}
+            <button
+              id="manage-queues"
+              type="button"
+              className={navClass(false)}
+              disabled={!queues.data}
+              onClick={() => {
+                setNotice(undefined);
+                setQueueView({ name: 'manage' });
+              }}
+            >
+              <SlidersHorizontal size={14} aria-hidden="true" />
+              <span>Manage queues</span>
+            </button>
           </fieldset>
         </aside>
         <main className="dashboard-main">

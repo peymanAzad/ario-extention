@@ -18,6 +18,14 @@ import {
 } from './download-workflows';
 import type { ExtensionError } from './connection';
 import { settingsPatchSchema, type ExtensionSettings } from './settings';
+import {
+  queueIdSchema,
+  queueOrderSchema,
+  queueSettingsInputSchema,
+  queueSettingsSnapshotSchema,
+  queueStatusSchema,
+  type QueueUpdateResult,
+} from './queue-workflows';
 
 const daemonRequest = {
   requestId: z.uuid(),
@@ -49,6 +57,36 @@ export const backgroundMessageSchema = z.discriminatedUnion('operation', [
     operation: z.literal('daemon.queues'),
     requestId: z.uuid(),
     origin: z.string(),
+  }),
+  z.strictObject({
+    operation: z.literal('daemon.queue'),
+    ...daemonRequest,
+    id: queueIdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('daemon.queue.create'),
+    ...daemonRequest,
+    settings: queueSettingsInputSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('daemon.queue.update'),
+    ...daemonRequest,
+    id: queueIdSchema,
+    settings: queueSettingsInputSchema,
+    expected: queueSettingsSnapshotSchema,
+    order: queueOrderSchema.optional(),
+  }),
+  z.strictObject({
+    operation: z.literal('daemon.queue.action'),
+    ...daemonRequest,
+    id: queueIdSchema,
+    status: queueStatusSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('daemon.queue.delete'),
+    ...daemonRequest,
+    id: queueIdSchema,
+    confirmed: z.boolean(),
   }),
   z.strictObject({
     operation: z.literal('downloadDraft.update'),
@@ -114,6 +152,11 @@ export type BackgroundResults = {
   'daemon.settings': DaemonSettings;
   'daemon.downloads': DownloadLiveStatus[];
   'daemon.queues': Queue[];
+  'daemon.queue': Queue;
+  'daemon.queue.create': Queue;
+  'daemon.queue.update': QueueUpdateResult;
+  'daemon.queue.action': 'applied' | 'nothing-to-start';
+  'daemon.queue.delete': 'deleted' | 'needs-confirmation';
   'daemon.download': DownloadLiveStatus;
   'daemon.download.add': DownloadLiveStatus;
   'daemon.download.torrent': DownloadLiveStatus;

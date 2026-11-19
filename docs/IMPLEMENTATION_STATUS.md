@@ -84,3 +84,19 @@ The background uses named, validated operations. Open views refresh affected que
 - Chrome and Firefox MV3 extensions were built and packaged. The sandbox denies binding to loopback. The automatic approval service returned HTTP 404 for the request to run the browser smoke checks outside the sandbox. Browser layout and live daemon workflows remain unverified for Phase 4.
 
 Continue with [Phase 5 — Queue management and HTTP parity](plans/phase-05-queues.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+
+## Phase 5 — Queue management and HTTP parity
+
+Implemented on November 19, 2026 against daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. The popup adds queue creation and management and uses the reference’s General, Schedule, Events, and Download Items sections. New queues start with one concurrent download, three retries, a five-second retry delay, inherited fine-tuning, and scheduling disabled.
+
+Schedules support one-time, daily, weekly, and overnight windows, startup catch-up, and the daemon’s current scheduled stop. One-time inputs convert from browser local time to UTC. The editor rejects newly entered times in skipped or repeated daylight-saving hours and preserves existing stored instants. Daily schedules send all seven weekdays. Recurring times use the daemon computer’s local timezone.
+
+The editor configures success and automatic-stop commands, clears them with explicit empty strings, and displays the latest attempts and timestamps. Queue order is staged until Save. If reordering fails after settings are saved, the editor retains the staged order for retry or reset. The manager can start, pause, and delete real queues, reports empty resume, protects Main Queue, and confirms deletion of records from nonempty queues. Downloaded files remain on disk.
+
+### Verification
+
+- Type checking, lint, formatting, and whitespace checks passed. All 79 Vitest tests passed.
+- Phase 5 tests cover settings round trips and validation, overnight windows, spring and fall daylight-saving transitions, command clearing and results, staged reorder, partial save and retry, stale configuration and order, Cancel, nonempty deletion, and empty resume. Tests use daemon-shaped HTTP fixtures through the extension background handler.
+- Chrome and Firefox MV3 extensions were built and packaged. The browser harnesses include queue editor theme and bounded scrolling checks. The sandbox denied loopback binding, and automatic approval review for running the browser smoke tests returned HTTP 404. The new browser checks and live daemon workflows remain unverified.
+
+Phase 6 will add browser handoff capabilities, including the daemon timezone when provided. Continue with [Phase 6 — Daemon browser handoff](plans/phase-06-daemon-handoff.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).

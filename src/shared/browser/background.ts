@@ -1,5 +1,6 @@
 import { browser, type Browser } from 'wxt/browser';
 import { runDownloadOperation } from '@/shared/api/download-operations';
+import { runQueueOperation } from '@/shared/api/queue-operations';
 import { writeDownloadDraft } from '@/shared/storage/download-draft';
 import { requestDaemon } from '@/shared/api/transport';
 import { writeDashboardFilters } from '@/shared/storage/dashboard';
@@ -149,6 +150,20 @@ export function createBackgroundHandler() {
             queueSchema.array(),
             options,
           );
+          break;
+        case 'daemon.queue':
+          data = await requestDaemon(
+            message.origin,
+            `/queues/${message.id}`,
+            queueSchema,
+            options,
+          );
+          break;
+        case 'daemon.queue.create':
+        case 'daemon.queue.update':
+        case 'daemon.queue.action':
+        case 'daemon.queue.delete':
+          data = await runQueueOperation(message, controller.signal);
           break;
         default:
           data = await runDownloadOperation(message, controller.signal);

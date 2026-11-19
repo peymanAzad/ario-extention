@@ -50,19 +50,23 @@ export function parseFineTune(input: FineTuneInput) {
 export function FineTuneFields({
   value,
   onChange,
+  queueDefaults = false,
 }: {
   value: FineTuneInput;
   onChange: (next: FineTuneInput) => void;
+  queueDefaults?: boolean;
 }) {
+  const fields = queueDefaults ? numberFields.slice(0, 2) : numberFields;
+  const inherit = queueDefaults ? 'Inherit aria2 default' : 'Inherit';
   return (
     <div className="grid grid-cols-2 gap-3 max-[360px]:grid-cols-1">
-      {numberFields.map(([field, label]) => (
+      {fields.map(([field, label]) => (
         <label key={field} className="workflow-field">
           {label}
           <input
             inputMode="numeric"
             maxLength={10}
-            placeholder="Inherit"
+            placeholder={inherit}
             value={value[field]}
             onChange={(event) =>
               onChange({ ...value, [field]: event.target.value })
@@ -78,7 +82,7 @@ export function FineTuneFields({
             onChange({ ...value, alloc_strategy: event.target.value })
           }
         >
-          <option value="">Inherit</option>
+          <option value="">{inherit}</option>
           {Object.entries(allocations).map(([key, label]) => (
             <option key={key} value={key}>
               {label}
@@ -94,7 +98,7 @@ export function FineTuneFields({
             onChange({ ...value, stream_piece_selector: event.target.value })
           }
         >
-          <option value="">Inherit</option>
+          <option value="">{inherit}</option>
           {Object.entries(selectors).map(([key, label]) => (
             <option key={key} value={key}>
               {label}

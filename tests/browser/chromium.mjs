@@ -161,6 +161,45 @@ try {
     await popup.evaluate(
       () => (document.documentElement.dataset.appearance = 'light'),
     );
+    await popup.getByRole('button', { name: 'Manage queues' }).click();
+    await popup.getByRole('button', { name: 'Edit Night shift' }).click();
+    await popup.getByRole('heading', { name: 'Night shift' }).waitFor();
+    const editor = popup.getByRole('main', { name: 'Queue editor' });
+    await popup.screenshot({ path: 'test-results/queue-chrome-light.png' });
+    await popup.getByRole('tab', { name: 'Schedule' }).click();
+    await popup.getByRole('switch', { name: 'Enable queue schedule' }).check();
+    await popup.getByLabel('Repeat').selectOption('weekly');
+    await popup.getByLabel('Start time', { exact: true }).fill('22:00');
+    await popup.getByLabel('Stop time', { exact: true }).fill('02:00');
+    await popup.getByText('The queue stops the following day.').waitFor();
+    await popup.evaluate(
+      () => (document.documentElement.dataset.appearance = 'dark'),
+    );
+    assert.equal(await background(), darkBackground);
+    await popup.screenshot({ path: 'test-results/queue-chrome-dark.png' });
+    await popup.setViewportSize({ width: 320, height: 260 });
+    assert.deepEqual(
+      await editor.evaluate((pane) => ({
+        pageWidth: document.body.scrollWidth,
+        scrolling: pane.scrollHeight > pane.clientHeight,
+        horizontalOverflow: pane.scrollWidth > pane.clientWidth,
+      })),
+      { pageWidth: 320, scrolling: true, horizontalOverflow: false },
+    );
+    await popup
+      .getByRole('button', { name: 'Save changes' })
+      .scrollIntoViewIfNeeded();
+    const saveBounds = await popup
+      .getByRole('button', { name: 'Save changes' })
+      .boundingBox();
+    assert.ok(saveBounds && saveBounds.y + saveBounds.height <= 260);
+    await popup.screenshot({ path: 'test-results/queue-chrome-narrow.png' });
+    await popup.getByRole('button', { name: 'Cancel' }).click();
+    await popup.getByRole('button', { name: 'Back to downloads' }).click();
+    await popup.setViewportSize({ width: 780, height: 580 });
+    await popup.evaluate(
+      () => (document.documentElement.dataset.appearance = 'light'),
+    );
     daemon.setOffline(true);
     await popup
       .getByText('Live updates interrupted · showing last known data', {

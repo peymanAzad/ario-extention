@@ -4,6 +4,7 @@ import {
   getDaemonSettings,
   getDownloads,
   getDownload,
+  getQueue,
   getQueues,
 } from '@/shared/browser/messages';
 
@@ -15,6 +16,8 @@ export const daemonKeys = {
   download: (origin: string, id: number) =>
     [...daemonKeys.origin(origin), 'download', id] as const,
   queues: (origin: string) => [...daemonKeys.origin(origin), 'queues'] as const,
+  queue: (origin: string, id: number | null) =>
+    [...daemonKeys.origin(origin), 'queue', id] as const,
   settings: (origin: string) =>
     [...daemonKeys.origin(origin), 'settings'] as const,
 };
@@ -64,6 +67,16 @@ export function useQueues(origin: string, enabled: boolean) {
     enabled,
     retry: false,
     refetchInterval: 1000,
+  });
+}
+
+export function useQueue(origin: string, id: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: daemonKeys.queue(origin, id),
+    queryFn: ({ signal }) => getQueue(origin, id!, signal),
+    enabled: enabled && id !== null,
+    retry: false,
+    refetchInterval: enabled && id !== null ? 1000 : false,
   });
 }
 

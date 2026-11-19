@@ -57,6 +57,13 @@ export async function startTestDaemon() {
     },
     created_at: '2026-11-19T00:00:00Z',
   };
+  const nightQueue = {
+    ...queue,
+    id: 2,
+    name: 'Night shift',
+    position: 1,
+    status: 'Paused',
+  };
   const statuses = [
     'Active',
     'Paused',
@@ -132,10 +139,8 @@ export async function startTestDaemon() {
       '/downloads': Array.from({ length: large ? 10000 : 7 }, (_, index) =>
         download(index),
       ),
-      '/queues': [
-        queue,
-        { ...queue, id: 2, name: 'Night shift', position: 1, status: 'Paused' },
-      ],
+      '/queues': [queue, nightQueue],
+      '/queues/2': nightQueue,
     }[request.url];
     if (request.method !== 'GET' || body === undefined) {
       response.writeHead(404).end();
@@ -169,6 +174,7 @@ export async function startTestDaemon() {
           'GET /settings',
           'GET /downloads',
           'GET /queues',
+          'GET /queues/2',
         ]),
       );
     },
