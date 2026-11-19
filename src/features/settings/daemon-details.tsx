@@ -1,4 +1,7 @@
-import { useDaemonSettings } from '@/shared/api/queries';
+import {
+  useBrowserCapabilities,
+  useDaemonSettings,
+} from '@/shared/api/queries';
 import type { DaemonHealth, DaemonSettings } from '@/shared/types/daemon';
 
 function proxyStatus(
@@ -21,6 +24,7 @@ export function DaemonDetails({
   health: DaemonHealth;
 }) {
   const settings = useDaemonSettings(origin);
+  const { data: capabilities } = useBrowserCapabilities(origin);
   const daemon = settings.data;
   const globalOptions = health.aria2_global_options;
   const aria2Defaults = [
@@ -70,6 +74,14 @@ export function DaemonDetails({
             </dl>
           </div>
           <div>
+            {capabilities?.daemon_timezone && (
+              <>
+                <h3 className="mb-2 font-medium">Daemon timezone</h3>
+                <p className="mb-4 font-mono break-all">
+                  {capabilities.daemon_timezone}
+                </p>
+              </>
+            )}
             <h3 className="mb-2 font-medium">Proxy</h3>
             <p>{proxyStatus(daemon.proxy, health)}</p>
             {daemon.proxy.host && (

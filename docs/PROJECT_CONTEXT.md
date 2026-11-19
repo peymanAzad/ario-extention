@@ -40,6 +40,10 @@ The popup’s Queues sidebar opens the queue manager or a new queue draft. The q
 
 One background operation saves queue settings and then applies staged order. It rereads the current configuration and download order before writes to detect concurrent changes. The endpoints have no atomic preconditions, so a concurrent change can still race between each check and write. A failed reorder leaves saved settings in place and the order staged for retry or reset. Nonempty queue deletion uses the daemon’s conflict response to request confirmation before deleting download records. The daemon keeps downloaded files.
 
+Phase 6 adds the [version 1 browser handoff API](BROWSER_HANDOFF_API.md). The extension background reads capabilities through a named request. Settings and the recurring queue schedule display the reported daemon timezone, with the existing local-time behavior available on older daemons. A missing capability route does not affect the existing management calls. One-time schedule inputs still use browser local time and serialize to UTC.
+
+The daemon stores handoff receipts outside the ordinary download list and scheduling tables. Commit persists the download and receipt together, then the normal scheduler starts eligible transfers. An authenticated loopback route streams session-bearing transfers to aria2 and sends context only to the validated final URL. Session headers are stored privately, excluded from management responses, and deleted with the download. The daemon rejects webpage origins and continues to accept originless local clients.
+
 Daemon contracts live in `common/src/`, `server/src/routes/`, `server/src/error.rs`, and `tui/src/api.rs`. The server returns bare JSON for active read routes and an empty body for some write routes. Structured application errors carry `{"result":"error","message":"…"}`. Rust enum variants use their serialized casing, and payload variants like download status `Error(String)` serialize as objects.
 
 ## Commands

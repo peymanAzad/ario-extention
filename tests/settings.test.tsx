@@ -54,6 +54,10 @@ it('tests a draft address and updates another open view only after saving', asyn
       HttpResponse.json({ ...health, aria2_reachable: false }),
     ),
     http.get(`${nextOrigin}/settings`, () => HttpResponse.json(daemonSettings)),
+    http.get(
+      `${nextOrigin}/browser-capabilities`,
+      () => new HttpResponse(null, { status: 404 }),
+    ),
   );
 
   const user = userEvent.setup();
@@ -63,6 +67,7 @@ it('tests a draft address and updates another open view only after saving', asyn
 
   await within(popup.container).findByText('Daemon connected');
   await options.findByText('/home/user/Downloads/Videos');
+  expect(await options.findByText('Asia/Tbilisi')).toBeVisible();
   const address = options.getByRole('textbox', { name: 'Server address' });
   expect(address).toHaveValue(defaultDaemonOrigin);
   await user.clear(address);
@@ -85,6 +90,8 @@ it('tests a draft address and updates another open view only after saving', asyn
   await within(popup.container).findByText(
     'Daemon connected · aria2 unreachable',
   );
+  await options.findByText('/home/user/Downloads/Videos');
+  expect(options.queryByText('Asia/Tbilisi')).not.toBeInTheDocument();
   await expect(readSettings()).resolves.toMatchObject({
     connection: { origin: nextOrigin },
   });

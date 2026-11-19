@@ -2,6 +2,13 @@ import { http, HttpResponse } from 'msw';
 import { dashboardDownloads, mainQueue, nightQueue } from './dashboard';
 import { defaultDaemonOrigin } from '@/shared/api/endpoint';
 
+export const capabilitiesUrl = `${defaultDaemonOrigin}/browser-capabilities`;
+export const browserCapabilities = {
+  protocol_version: 1,
+  staged_handoff: true,
+  http_session: true,
+  daemon_timezone: 'Asia/Tbilisi',
+};
 export const healthUrl = `${defaultDaemonOrigin}/health`;
 export const health = {
   server: 'ok',
@@ -27,6 +34,7 @@ export const daemonSettings = {
 };
 
 export const daemonHandlers = [
+  http.get(capabilitiesUrl, () => HttpResponse.json(browserCapabilities)),
   http.get(`${defaultDaemonOrigin}/downloads`, () =>
     HttpResponse.json(dashboardDownloads),
   ),

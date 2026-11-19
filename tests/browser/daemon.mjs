@@ -136,6 +136,12 @@ export async function startTestDaemon() {
     const body = {
       '/health': health,
       '/settings': settings,
+      '/browser-capabilities': {
+        protocol_version: 1,
+        staged_handoff: true,
+        http_session: true,
+        daemon_timezone: 'Asia/Tbilisi',
+      },
       '/downloads': Array.from({ length: large ? 10000 : 7 }, (_, index) =>
         download(index),
       ),
@@ -172,6 +178,7 @@ export async function startTestDaemon() {
         new Set([
           'GET /health',
           'GET /settings',
+          'GET /browser-capabilities',
           'GET /downloads',
           'GET /queues',
           'GET /queues/2',

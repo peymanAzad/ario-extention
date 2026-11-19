@@ -85,6 +85,8 @@ try {
     .waitFor();
   await options.getByRole('button', { name: 'Save address' }).click();
   await options.getByRole('heading', { name: 'Download locations' }).waitFor();
+  if (daemon.fixture)
+    await options.getByText('Asia/Tbilisi', { exact: true }).waitFor();
   await popup.bringToFront();
   await popup.getByText('Daemon connected', { exact: true }).waitFor();
   await options.bringToFront();

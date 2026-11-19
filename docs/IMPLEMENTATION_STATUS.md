@@ -100,3 +100,18 @@ The editor configures success and automatic-stop commands, clears them with expl
 - Chrome and Firefox MV3 extensions were built and packaged. The browser harnesses include queue editor theme and bounded scrolling checks. The sandbox denied loopback binding, and automatic approval review for running the browser smoke tests returned HTTP 404. The new browser checks and live daemon workflows remain unverified.
 
 Phase 6 will add browser handoff capabilities, including the daemon timezone when provided. Continue with [Phase 6 — Daemon browser handoff](plans/phase-06-daemon-handoff.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+
+## Phase 6 — Daemon browser handoff
+
+Implemented and verified on November 19, 2026 in the daemon checkout at `/home/asana/projects/ario`, based on `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. The daemon reports browser protocol version 1, durable handoff and HTTP session support, and its timezone when available. It validates and stages requests under client UUIDs, atomically commits one download per UUID, and keeps receipts available for reconciliation after restart. The normal scheduler applies the selected start mode and queue capacity. Deleting a queue aborts its staged requests.
+
+The daemon accepts HTTP(S) GET and public BitTorrent v1 magnet handoffs. Session-bearing requests use the browser-observed final URL through a daemon-controlled relay that refuses redirects and preserves byte ranges. Session context remains private and is removed with the corresponding download. The loopback API accepts Chrome and Firefox extension origins and originless local clients. The extension reports the daemon timezone in Settings and recurring schedules when provided. Older daemons continue to support existing management workflows.
+
+### Verification
+
+- Rust formatting and Clippy with warnings denied passed. All 347 Rust tests passed, including TUI regressions. Phase 6 tests cover concurrent and repeated staging and commit, conflicting UUID reuse, restart, abort, deleted queues, private context, safe filenames, CORS and JSON restrictions, byte ranges, same-origin and cross-origin redirect refusal, and migration of an existing SQLite database.
+- A temporary daemon with aria2 1.37.0 completed a credentialed transfer with the suggested filename, refused a cross-origin redirect, and reused the session successfully on retry. The check also verified that session headers stayed out of lists and process logs and that deletion removed stored context.
+- Extension type checking, lint, format, and whitespace checks passed. All 82 Vitest tests passed, including older-daemon compatibility and timezone display.
+- Chrome and Firefox MV3 bundles built and packaged. Smoke checks passed in Chrome 157.0.8103.78 and Firefox 160.0 against both the HTTP fixture and the temporary daemon. The fixture checks verified timezone display through the production background script.
+
+Continue with [Phase 7 — Context menu and confirmation](plans/phase-07-context-menu.md) and the [browser handoff API contract](BROWSER_HANDOFF_API.md). Context-menu registration, session collection, confirmation, and browser download interception are pending.

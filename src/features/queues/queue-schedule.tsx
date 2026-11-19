@@ -15,10 +15,12 @@ const dayNames = {
 
 export function QueueSchedule({
   draft,
+  daemonTimezone,
   scheduledStop,
   onChange,
 }: {
   draft: ScheduleDraft;
+  daemonTimezone?: string | null;
   scheduledStop: Queue['scheduled_stop_at'];
   onChange: (patch: Partial<ScheduleDraft>) => void;
 }) {
@@ -126,7 +128,9 @@ export function QueueSchedule({
               <p>
                 {once
                   ? 'Enter one-time dates in your browser’s local timezone.'
-                  : 'Recurring times follow the daemon computer’s timezone.'}
+                  : daemonTimezone
+                    ? `Recurring times follow the daemon timezone (${daemonTimezone}).`
+                    : 'Recurring times follow the daemon computer’s timezone.'}
               </p>
               {overnight && <p>The queue stops the following day.</p>}
             </div>

@@ -3,7 +3,11 @@ import { Clock3 } from 'lucide-react';
 import { Tabs } from 'radix-ui';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { FineTuneFields } from '@/features/downloads/fine-tune-fields';
-import { daemonKeys, useQueue } from '@/shared/api/queries';
+import {
+  daemonKeys,
+  useBrowserCapabilities,
+  useQueue,
+} from '@/shared/api/queries';
 import { writeQueue } from '@/shared/browser/messages';
 import { ArioError } from '@/shared/types/connection';
 import type { DownloadLiveStatus, Queue } from '@/shared/types/daemon';
@@ -44,6 +48,10 @@ type EditorProps = {
 
 export function QueueEditor(props: EditorProps) {
   const detail = useQueue(props.origin, props.id, props.visible);
+  const { data: capabilities } = useBrowserCapabilities(
+    props.origin,
+    props.visible && !props.unavailable,
+  );
   if (props.id !== null && !detail.data) {
     return (
       <QueueScreen
@@ -82,6 +90,7 @@ export function QueueEditor(props: EditorProps) {
     <QueueForm
       {...props}
       queue={detail.data}
+      daemonTimezone={capabilities?.daemon_timezone}
       unavailable={props.unavailable || detail.isError}
     />
   );
@@ -91,6 +100,7 @@ function QueueForm({
   origin,
   id,
   queue,
+  daemonTimezone,
   downloads,
   downloadsUnavailable,
   unavailable,
@@ -98,7 +108,7 @@ function QueueForm({
   onBack,
   onClose,
   onSaved,
-}: EditorProps & { queue?: Queue }) {
+}: EditorProps & { queue?: Queue; daemonTimezone?: string | null }) {
   const client = useQueryClient();
   const [source, setSource] = useState(queue);
   const [draft, setDraft] = useState(() => queueDraft(queue));
@@ -308,6 +318,7 @@ function QueueForm({
                 <fieldset disabled={busy}>
                   <QueueSchedule
                     draft={draft.schedule}
+                    daemonTimezone={daemonTimezone}
                     scheduledStop={queue?.scheduled_stop_at ?? null}
                     onChange={(patch) =>
                       change({ schedule: { ...draft.schedule, ...patch } })

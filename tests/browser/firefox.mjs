@@ -101,6 +101,7 @@ try {
   );
   await (await button('Save address')).click();
   await waitForText('Download locations');
+  if (daemon.fixture) await waitForText('Asia/Tbilisi');
   await driver.switchTo().window(popupHandle);
   await waitForText('Daemon connected');
   await driver.switchTo().window(optionsHandle);

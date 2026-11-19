@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import {
   checkDaemon,
+  getBrowserCapabilities,
   getDaemonSettings,
   getDownloads,
   getDownload,
@@ -18,6 +19,8 @@ export const daemonKeys = {
   queues: (origin: string) => [...daemonKeys.origin(origin), 'queues'] as const,
   queue: (origin: string, id: number | null) =>
     [...daemonKeys.origin(origin), 'queue', id] as const,
+  browserCapabilities: (origin: string) =>
+    [...daemonKeys.origin(origin), 'browser-capabilities'] as const,
   settings: (origin: string) =>
     [...daemonKeys.origin(origin), 'settings'] as const,
 };
@@ -47,6 +50,16 @@ export function useDaemonSettings(origin: string) {
     queryKey: daemonKeys.settings(origin),
     queryFn: ({ signal }) => getDaemonSettings(origin, signal),
     retry: false,
+  });
+}
+
+export function useBrowserCapabilities(origin: string, enabled = true) {
+  return useQuery({
+    queryKey: daemonKeys.browserCapabilities(origin),
+    queryFn: ({ signal }) => getBrowserCapabilities(origin, signal),
+    enabled,
+    retry: false,
+    staleTime: 60_000,
   });
 }
 

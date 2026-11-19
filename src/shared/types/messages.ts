@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BrowserCapabilities } from './browser-capabilities';
 import { dashboardFiltersSchema, type DashboardFilters } from './dashboard';
 import { fineTuneSchema } from './daemon';
 import type {
@@ -47,6 +48,10 @@ export const backgroundMessageSchema = z.discriminatedUnion('operation', [
     operation: z.literal('daemon.settings'),
     requestId: z.uuid(),
     origin: z.string(),
+  }),
+  z.strictObject({
+    operation: z.literal('daemon.browserCapabilities'),
+    ...daemonRequest,
   }),
   z.strictObject({
     operation: z.literal('daemon.downloads'),
@@ -150,6 +155,7 @@ export type BackgroundMessage = z.input<typeof backgroundMessageSchema>;
 export type BackgroundResults = {
   'daemon.health': DaemonHealth;
   'daemon.settings': DaemonSettings;
+  'daemon.browserCapabilities': BrowserCapabilities | null;
   'daemon.downloads': DownloadLiveStatus[];
   'daemon.queues': Queue[];
   'daemon.queue': Queue;

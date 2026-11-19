@@ -11,6 +11,7 @@ import {
   downloadLiveStatusSchema,
   queueSchema,
 } from '@/shared/types/daemon';
+import { browserCapabilitiesSchema } from '@/shared/types/browser-capabilities';
 import { ArioError } from '@/shared/types/connection';
 import {
   backgroundMessageSchema,
@@ -134,6 +135,24 @@ export function createBackgroundHandler() {
             daemonSettingsSchema,
             options,
           );
+          break;
+        case 'daemon.browserCapabilities':
+          try {
+            data = await requestDaemon(
+              message.origin,
+              '/browser-capabilities',
+              browserCapabilitiesSchema,
+              options,
+            );
+          } catch (error) {
+            if (!(
+              error instanceof ArioError &&
+              error.detail.kind === 'http' &&
+              error.detail.status === 404
+            ))
+              throw error;
+            data = null;
+          }
           break;
         case 'daemon.downloads':
           data = await requestDaemon(

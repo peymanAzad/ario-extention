@@ -44,6 +44,7 @@ async function send<K extends Operation>(
 type DaemonRead =
   | 'daemon.health'
   | 'daemon.settings'
+  | 'daemon.browserCapabilities'
   | 'daemon.downloads'
   | 'daemon.queues'
   | 'daemon.queue'
@@ -82,6 +83,13 @@ export const checkDaemon = (origin: string, signal?: AbortSignal) =>
 export const getDaemonSettings = (origin: string, signal?: AbortSignal) =>
   daemonRequest(
     'daemon.settings',
+    { origin, requestId: crypto.randomUUID() },
+    signal,
+  );
+
+export const getBrowserCapabilities = (origin: string, signal?: AbortSignal) =>
+  daemonRequest(
+    'daemon.browserCapabilities',
     { origin, requestId: crypto.randomUUID() },
     signal,
   );

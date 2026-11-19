@@ -236,7 +236,9 @@ it('validates and round trips creation defaults, daily and weekly overnight wind
   await user.selectOptions(field('Repeat'), 'daily');
   fill('Stop time', '02:00');
   expect(screen.getByText(/stops the following day/)).toBeVisible();
-  expect(screen.getByText(/daemon computer’s timezone/)).toBeVisible();
+  expect(
+    await screen.findByText(/daemon timezone \(Asia\/Tbilisi\)/),
+  ).toBeVisible();
   await user.click(screen.getByRole('switch', { name: 'Catch up on startup' }));
   await user.click(button('Create queue'));
   expect(await screen.findByText('Queue “Late shift” created.')).toBeVisible();
