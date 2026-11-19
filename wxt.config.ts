@@ -10,9 +10,9 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'Ario',
     description: 'Manage downloads with the local Ario daemon.',
-    permissions: ['storage', 'contextMenus'],
+    permissions: ['storage', 'contextMenus', 'alarms'],
     host_permissions: [...loopbackHostPermissions],
-    optional_permissions: ['cookies'],
+    optional_permissions: ['cookies', 'downloads', 'webRequest'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
     ...(browser === 'firefox' && {
       browser_specific_settings: {

@@ -10,7 +10,10 @@ import type {
   ImportOptions,
 } from '@/shared/types/download-workflows';
 import type { DashboardFilters } from '@/shared/types/dashboard';
-import type { SettingsPatch } from '@/shared/types/settings';
+import type {
+  CaptureSettingsPatch,
+  SettingsPatch,
+} from '@/shared/types/settings';
 
 type Operation = keyof BackgroundResults;
 type Payloads = {
@@ -106,7 +109,18 @@ export const submitConfirmation = (
   id: string,
   options: ImportOptions,
   session: boolean,
-) => send('confirmation.submit', { id, options, session });
+  suppressCapture?: boolean,
+) => send('confirmation.submit', { id, options, session, suppressCapture });
+
+export const enableCapture = (enabled: boolean) =>
+  send('capture.enable', { enabled });
+export const saveCapturePreferences = (patch: CaptureSettingsPatch) =>
+  send('capture.preferences', { patch });
+export const getCaptureNotices = () => send('capture.list', {});
+export const openCapture = (id: string) => send('capture.open', { id });
+export const keepCapture = (id: string) => send('capture.keep', { id });
+export const retryCapture = (id: string) => send('capture.retry', { id });
+export const dismissCapture = (id: string) => send('capture.dismiss', { id });
 
 export const getDownloads = (origin: string, signal?: AbortSignal) =>
   daemonRequest(

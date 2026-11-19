@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { By, Key, until } from 'selenium-webdriver';
@@ -18,8 +20,18 @@ const archive = resolve(
   `${app.name}-${manifest.version}-firefox.zip`,
 );
 const uuid = randomUUID();
+const downloadDir = await mkdtemp(join(tmpdir(), 'ario-capture-firefox-'));
 const options = new firefox.Options()
   .addArguments('-headless')
+  // Drive Firefox’s permission API without its native doorhanger in headless mode.
+  .setPreference('extensions.webextOptionalPermissionPrompts', false)
+  .setPreference('browser.download.folderList', 2)
+  .setPreference('browser.download.dir', downloadDir)
+  .setPreference('browser.download.useDownloadDir', true)
+  .setPreference(
+    'browser.helperApps.neverAsk.saveToDisk',
+    'application/octet-stream',
+  )
   .setPreference(
     'extensions.webextensions.uuids',
     JSON.stringify({ [id]: uuid }),
@@ -401,6 +413,147 @@ try {
         session: { cookie: 'ario_fixture=allowed' },
       },
     );
+    await driver.switchTo().window(optionsHandle);
+    const captureSwitch = (name) =>
+      driver.findElement(By.css(`input[role="switch"][aria-label="${name}"]`));
+    const enable = await captureSwitch('Capture browser downloads');
+    await driver.wait(until.elementIsEnabled(enable), 10_000);
+    await enable.click();
+    await driver.wait(
+      () => enable.isSelected(),
+      10_000,
+      'Expected Firefox capture permission to take effect',
+    );
+    await driver.switchTo().newWindow('tab');
+    const captureSource = await driver.getWindowHandle();
+    await driver.get(`${daemon.origin}/capture-fixture`);
+
+    async function captureWindow(id) {
+      const previous = await driver.getAllWindowHandles();
+      await driver.findElement(By.id(id)).click();
+      const handle = await driver.wait(
+        async () =>
+          (await driver.getAllWindowHandles()).find(
+            (candidate) => !previous.includes(candidate),
+          ),
+        8000,
+        `Expected a Firefox capture window for ${id}`,
+      );
+      await driver.switchTo().window(handle);
+      await waitForText('Browser download');
+      return handle;
+    }
+    const kept = await captureWindow('capture-keep');
+    await (await button('Keep in browser')).click();
+    await waitForText('The download is continuing in your browser.');
+    await closeConfirmation(kept);
+    await driver.switchTo().window(captureSource);
+    const asked = await captureWindow('capture-ask');
+    await writeFile(
+      'test-results/capture-firefox-dark.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+    await driver
+      .findElement(By.css('#confirmation-queue option[value="2"]'))
+      .click();
+    await driver
+      .findElement(
+        By.xpath(
+          '//label[.//span[contains(text(), "Don’t show me again")]]/input',
+        ),
+      )
+      .click();
+    await (await button('Save for later')).click();
+    await waitForText('Added to Ario.');
+    await closeConfirmation(asked);
+
+    await driver.switchTo().window(optionsHandle);
+    assert.equal(
+      await (await captureSwitch('Ask before downloading')).isSelected(),
+      false,
+    );
+    const useSession = await captureSwitch('Use browser session');
+    await useSession.click();
+    await driver.wait(() => useSession.isSelected(), 10_000);
+    await driver.switchTo().window(captureSource);
+    await driver.findElement(By.id('capture-automatic')).click();
+    await driver.wait(
+      () =>
+        daemon.captureHandoffs().length === 2 &&
+        daemon.captureHandoffs()[1].state === 'committed',
+      8000,
+    );
+    assert.deepEqual(
+      daemon
+        .captureHandoffs()
+        .map(({ payload, state }) => [
+          payload.url,
+          payload.queue_id,
+          payload.start_immediately,
+          payload.session,
+          state,
+        ]),
+      [
+        [
+          `${daemon.origin}/capture-files/ask`,
+          2,
+          false,
+          undefined,
+          'committed',
+        ],
+        [
+          `${daemon.origin}/capture-files/cookie?signature=x%2Fz%2B`,
+          1,
+          true,
+          {
+            cookie: 'capture_session=fixture',
+            referrer: `${daemon.origin}/capture-fixture`,
+          },
+          'committed',
+        ],
+      ],
+    );
+    await driver.findElement(By.id('capture-post')).click();
+    await driver.switchTo().window(optionsHandle);
+    await driver.wait(
+      () =>
+        driver.executeAsyncScript(`
+      const done = arguments[0];
+      browser.downloads.search({}).then((downloads) => done(
+        ['/keep', '/post'].every((suffix) =>
+          downloads.some(({ url, state }) => url.endsWith(suffix) && state === 'complete')
+        ) && downloads.some(({ url, state, error }) =>
+          url.endsWith('/ask') && state === 'interrupted' && error === 'USER_CANCELED'
+        )
+      ));
+    `),
+      10_000,
+      'Expected browser history to keep the resumed, POST, and canceled downloads',
+    );
+    assert.equal(daemon.captureHandoffs().length, 2);
+
+    const ask = await captureSwitch('Ask before downloading');
+    await ask.click();
+    await driver.wait(() => ask.isSelected(), 10_000);
+    await driver.switchTo().window(captureSource);
+    const revoked = await captureWindow('capture-revoke');
+    await driver.switchTo().window(optionsHandle);
+    assert.equal(
+      await driver.executeAsyncScript(`
+      const done = arguments[0];
+      browser.permissions.remove({ permissions: ['webRequest'] }).then(done);
+    `),
+      true,
+    );
+    await driver.wait(
+      async () => !(await enable.isSelected()),
+      10_000,
+      'Expected Firefox capture to turn off after observation permission was removed',
+    );
+    await driver.switchTo().window(revoked);
+    await waitForText('The download is continuing in your browser.');
+    await closeConfirmation(revoked);
   }
 
   daemon.verify();
@@ -408,4 +561,5 @@ try {
 } finally {
   await driver.quit();
   await daemon?.close();
+  await rm(downloadDir, { recursive: true, force: true });
 }

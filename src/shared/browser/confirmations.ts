@@ -1,6 +1,7 @@
 import { browser, type Browser } from 'wxt/browser';
 import { z } from 'zod';
 import {
+  isHandoffRejection,
   readBrowserCapabilities,
   readBrowserHandoff,
   resolveBrowserHandoff,
@@ -70,16 +71,6 @@ function saveJournal(id: string, entry: Journal) {
 
 const editing = { state: 'draft' } as const;
 const pending = { state: 'pending' } as const;
-
-function isClientRejection(error: unknown) {
-  return (
-    error instanceof ArioError &&
-    error.detail.kind === 'http' &&
-    error.detail.status !== undefined &&
-    error.detail.status >= 400 &&
-    error.detail.status < 500
-  );
-}
 
 const confirmationError = (message: string) =>
   new ArioError({ kind: 'extension', message });
@@ -186,7 +177,7 @@ export function createConfirmations() {
       );
       if (receipt === undefined) return pending;
       if (receipt?.state !== 'staged') return finish(id, receipt);
-      if (action === 'abort' || !isClientRejection(error)) return pending;
+      if (action === 'abort' || !isHandoffRejection(error)) return pending;
 
       // A rejected commit can leave a staged payload on the daemon. Record
       // the abort decision before trying it so a restart cannot commit it.
@@ -287,10 +278,10 @@ export function createConfirmations() {
           entry.id,
           draft.url,
           options,
-          cookie,
+          cookie === undefined ? undefined : { cookie },
         );
       } catch (error) {
-        if (!isClientRejection(error)) return recover(id, entry, true);
+        if (!isHandoffRejection(error)) return recover(id, entry, true);
         await browser.storage.local.remove(storageKey(id));
         throw error;
       }

@@ -1,15 +1,18 @@
 import { z } from 'zod';
+import type { CaptureConfirmation } from './capture';
 
 export const confirmationIdSchema = z.uuid();
 
 export type ConfirmationOutcome =
-  { state: 'draft' | 'pending' } | { state: 'committed'; downloadId: number };
+  | { state: 'draft' | 'pending' | 'browser' | 'recovery' }
+  | { state: 'committed'; downloadId: number };
 
 export type ConfirmationDraft = {
   id: string;
   origin: string;
   url: string;
   sessionHost: string | null;
+  capture?: CaptureConfirmation;
   outcome: ConfirmationOutcome;
 };
 

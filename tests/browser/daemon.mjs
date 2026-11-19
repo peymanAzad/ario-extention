@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
+import { clearInterval, setInterval } from 'node:timers';
+import { URL } from 'node:url';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { smokeMagnet } from './confirmation.mjs';
@@ -128,6 +131,54 @@ export async function startTestDaemon() {
       .writeHead(200, { 'Content-Type': 'application/json' })
       .end(JSON.stringify(body));
   const server = createServer(async (request, response) => {
+    const url = new URL(request.url, 'http://127.0.0.1');
+    if (url.pathname === '/capture-fixture') {
+      response.writeHead(200, {
+        'Content-Type': 'text/html',
+        'Set-Cookie':
+          'capture_session=fixture; Path=/capture-files/cookie; HttpOnly; SameSite=Strict',
+      });
+      response.end(`<a id="capture-keep" href="/capture-files/keep">Keep test</a>
+        <a id="capture-ask" href="/capture-files/ask">Ask test</a>
+        <a id="capture-close" href="/capture-files/close">Close test</a>
+        <a id="capture-revoke" href="/capture-files/revoke">Revoke test</a>
+        <a id="capture-automatic" href="/capture-go">Automatic test</a>
+        <form method="POST" action="/capture-files/post"><button id="capture-post">POST test</button></form>`);
+      return;
+    }
+    if (url.pathname === '/capture-go') {
+      return response
+        .writeHead(302, {
+          Location: '/capture-files/cookie?signature=x%2Fz%2B',
+        })
+        .end();
+    }
+    if (url.pathname.startsWith('/capture-files/')) {
+      const name = url.pathname.split('/').at(-1);
+      const size = 96 * 1024;
+      const start = Number(
+        /^bytes=(\d+)-/.exec(request.headers.range)?.[1] ?? 0,
+      );
+      response.writeHead(start ? 206 : 200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="capture-${name}.bin"`,
+        'Content-Length': size - start,
+        'Accept-Ranges': 'bytes',
+        ETag: '"ario-capture-fixture"',
+        ...(start && { 'Content-Range': `bytes ${start}-${size - 1}/${size}` }),
+      });
+      let sent = start;
+      function writeChunk() {
+        const bytes = Math.min(1024, size - sent);
+        sent += bytes;
+        response.write(Buffer.alloc(bytes));
+        if (sent === size) response.end();
+      }
+      writeChunk();
+      const timer = setInterval(writeChunk, 35);
+      response.on('close', () => clearInterval(timer));
+      return;
+    }
     if (request.url === '/favicon.ico') return response.writeHead(204).end();
     if (request.url === '/browser-handoff-fixture') {
       response.writeHead(200, {
@@ -151,15 +202,26 @@ export async function startTestDaemon() {
       json(response, { id, state: 'staged', download_id: null });
       return;
     }
-    const commit = /^\/browser-handoffs\/([\da-f-]+)\/commit$/.exec(
-      request.url,
-    );
-    if (commit && request.method === 'POST') {
-      const id = commit[1];
+    const handoffPath =
+      /^\/browser-handoffs\/([\da-f-]+)(?:\/(commit|abort))?$/.exec(
+        request.url,
+      );
+    if (handoffPath) {
+      const [, id, action] = handoffPath;
       const handoff = handoffs.get(id);
       if (!handoff) return response.writeHead(404).end();
-      handoff.state = 'committed';
-      json(response, { id, state: 'committed', download_id: 42 });
+      if (
+        (action === 'commit' && handoff.state === 'aborted') ||
+        (action === 'abort' && handoff.state === 'committed')
+      )
+        return response.writeHead(409).end();
+      if (action === 'commit') handoff.state = 'committed';
+      if (action === 'abort') handoff.state = 'aborted';
+      json(response, {
+        id,
+        state: handoff.state,
+        download_id: handoff.state === 'committed' ? 42 : null,
+      });
       return;
     }
     requests.add(`${request.method} ${request.url}`);
@@ -209,6 +271,11 @@ export async function startTestDaemon() {
     },
     downloadRequests() {
       return counts.get('/downloads') ?? 0;
+    },
+    captureHandoffs() {
+      return [...handoffs.values()].filter(({ payload }) =>
+        payload.url.includes('/capture-files/'),
+      );
     },
     verifyHandoffs(...payloads) {
       assert.deepEqual(

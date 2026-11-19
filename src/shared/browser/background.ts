@@ -18,6 +18,7 @@ import {
   type BackgroundReply,
   type BackgroundResults,
 } from '@/shared/types/messages';
+import { createCapture } from './capture';
 import { createConfirmations } from './confirmations';
 
 const uiPages = ['/popup.html', '/options.html', '/confirmation.html'] as const;
@@ -35,7 +36,10 @@ export function isTrustedUi(sender: Browser.runtime.MessageSender): boolean {
   return uiPages.some((page) => browser.runtime.getURL(page) === documentUrl);
 }
 
-export function createBackgroundHandler(confirmations = createConfirmations()) {
+export function createBackgroundHandler(
+  confirmations = createConfirmations(),
+  capture = createCapture(),
+) {
   const requests = new Map<string, AbortController>();
 
   return function onMessage(
@@ -53,40 +57,6 @@ export function createBackgroundHandler(confirmations = createConfirmations()) {
     message: ReturnType<typeof backgroundMessageSchema.parse>,
     sender: Browser.runtime.MessageSender,
   ): Promise<Reply> {
-    if (
-      message.operation === 'confirmation.get' ||
-      message.operation === 'confirmation.check' ||
-      message.operation === 'confirmation.submit'
-    ) {
-      try {
-        const { id } = message;
-        const data =
-          message.operation === 'confirmation.get'
-            ? await confirmations.get(id, sender)
-            : message.operation === 'confirmation.check'
-              ? await confirmations.check(id, sender)
-              : await confirmations.submit(
-                  id,
-                  message.options,
-                  message.session,
-                  sender,
-                );
-        return { ok: true, data };
-      } catch (error) {
-        return {
-          ok: false,
-          error:
-            error instanceof ArioError
-              ? error.detail
-              : {
-                  kind: 'extension',
-                  message:
-                    'The confirmation is temporarily unavailable. Try checking its status again.',
-                },
-        };
-      }
-    }
-
     if (message.operation === 'dashboard.update') {
       try {
         return { ok: true, data: await writeDashboardFilters(message.filters) };
@@ -126,6 +96,81 @@ export function createBackgroundHandler(confirmations = createConfirmations()) {
             kind: 'storage',
             message: 'Could not save extension settings.',
           },
+        };
+      }
+    }
+
+    if (!('requestId' in message)) {
+      try {
+        let data: BackgroundResults[keyof BackgroundResults];
+        switch (message.operation) {
+          case 'capture.enable':
+            data = await capture.setEnabled(message.enabled);
+            break;
+          case 'capture.preferences':
+            data = await capture.savePreferences(message.patch);
+            break;
+          case 'capture.list':
+            data = await capture.list();
+            break;
+          case 'capture.open':
+            await capture.reopen(message.id);
+            data = null;
+            break;
+          case 'capture.dismiss':
+            await capture.dismiss(message.id);
+            data = null;
+            break;
+          case 'capture.keep':
+            data = await capture.keep(
+              message.id,
+              sender.url?.split(/[?#]/, 1)[0] ===
+                browser.runtime.getURL('/popup.html')
+                ? undefined
+                : sender,
+            );
+            break;
+          case 'capture.retry':
+            data = await capture.retryBrowser(message.id);
+            break;
+          case 'confirmation.get':
+            data =
+              (await capture.get(message.id, sender)) ??
+              (await confirmations.get(message.id, sender));
+            break;
+          case 'confirmation.check':
+            data = (await capture.get(message.id, sender))
+              ? await capture.check(message.id, sender)
+              : await confirmations.check(message.id, sender);
+            break;
+          case 'confirmation.submit':
+            data = (await capture.get(message.id, sender))
+              ? await capture.submit(
+                  message.id,
+                  message.options,
+                  message.suppressCapture ?? false,
+                  sender,
+                )
+              : await confirmations.submit(
+                  message.id,
+                  message.options,
+                  message.session,
+                  sender,
+                );
+            break;
+        }
+        return { ok: true, data };
+      } catch (error) {
+        return {
+          ok: false,
+          error:
+            error instanceof ArioError
+              ? error.detail
+              : {
+                  kind: 'extension',
+                  message:
+                    'Browser download controls are temporarily unavailable. Try again.',
+                },
         };
       }
     }

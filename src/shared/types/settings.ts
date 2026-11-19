@@ -17,20 +17,35 @@ export const connectionSettingsSchema = z.strictObject({
   origin: daemonOriginSchema,
 });
 
-const capturePreferencesSchema = z.object({
+const captureFields = {
+  askBeforeDownloading: z.boolean(),
+  defaultQueueId: z.int().positive(),
+  fineTuneOverride: fineTuneSchema.nullable(),
+  startImmediately: z.boolean(),
+  useBrowserSession: z.boolean(),
+};
+export const capturePreferencesSchema = z.object({
   enabled: z.boolean().default(false),
-  askBeforeDownloading: z.boolean().default(true),
-  defaultQueueId: z.int().positive().default(1),
-  fineTuneOverride: fineTuneSchema.nullable().default(null),
-  startImmediately: z.boolean().default(true),
-  useBrowserSession: z.boolean().default(false),
+  askBeforeDownloading: captureFields.askBeforeDownloading.default(true),
+  defaultQueueId: captureFields.defaultQueueId.default(1),
+  fineTuneOverride: captureFields.fineTuneOverride.default(null),
+  startImmediately: captureFields.startImmediately.default(true),
+  useBrowserSession: captureFields.useBrowserSession.default(false),
 });
+export type CapturePreferences = z.infer<typeof capturePreferencesSchema>;
+
+export const captureSettingsPatchSchema = z
+  .strictObject(captureFields)
+  .partial();
+export type CaptureSettingsPatch = z.infer<typeof captureSettingsPatchSchema>;
 
 export const extensionSettingsSchema = z.object({
   version: z.literal(1),
   connection: connectionSettingsSchema,
   appearance: appearanceSchema,
-  capture: capturePreferencesSchema,
+  capture: capturePreferencesSchema.default(() =>
+    capturePreferencesSchema.parse({}),
+  ),
 });
 export type ExtensionSettings = z.infer<typeof extensionSettingsSchema>;
 

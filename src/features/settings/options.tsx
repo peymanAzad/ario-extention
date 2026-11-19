@@ -1,5 +1,6 @@
 import { AppHeader } from '@/shared/ui/shell';
 import { AppearanceSettings } from './appearance';
+import { CaptureSettings } from './capture-settings';
 import { ConnectionSettings } from './connection-form';
 import { useExtensionSettings } from './settings-context';
 
@@ -18,6 +19,12 @@ export function Options() {
           </p>
         )}
         <ConnectionSettings key={origin} origin={origin} ready={ready} />
+        <CaptureSettings
+          key={`capture-${origin}`}
+          origin={origin}
+          ready={ready}
+          preferences={settings.capture}
+        />
         <AppearanceSettings />
       </main>
     </div>

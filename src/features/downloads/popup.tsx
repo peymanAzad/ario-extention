@@ -40,6 +40,7 @@ import {
   statusKey,
   statusLabels,
 } from './dashboard-model';
+import { CaptureNotices } from './capture-notices';
 import { useDashboardFilters, usePageVisible } from './dashboard-state';
 import { categoryIcons, DownloadList } from './download-list';
 import { AddDownloadDialog } from './add-download-dialog';
@@ -415,6 +416,7 @@ function Dashboard({
           </fieldset>
         </aside>
         <main className="dashboard-main">
+          <CaptureNotices enabled={enabled} />
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <h1>Downloads</h1>

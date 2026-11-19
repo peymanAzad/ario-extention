@@ -13,10 +13,15 @@ export async function readBuild(browser) {
 
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.permissions.toSorted(), [
+    'alarms',
     'contextMenus',
     'storage',
   ]);
-  assert.deepEqual(manifest.optional_permissions, ['cookies']);
+  assert.deepEqual(manifest.optional_permissions.toSorted(), [
+    'cookies',
+    'downloads',
+    'webRequest',
+  ]);
   assert.deepEqual(manifest.optional_host_permissions.toSorted(), [
     'http://*/*',
     'https://*/*',

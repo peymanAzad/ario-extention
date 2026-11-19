@@ -4,6 +4,7 @@ import {
   defaultExtensionSettings,
   extensionSettingsSchema,
   type ExtensionSettings,
+  type CapturePreferences,
   type SettingsPatch,
 } from '@/shared/types/settings';
 
@@ -54,11 +55,15 @@ export function watchSettings(
 let pendingWrite: Promise<void> = Promise.resolve();
 
 export function updateSettings(
-  patch: SettingsPatch,
+  patch: SettingsPatch & { capture?: Partial<CapturePreferences> },
 ): Promise<ExtensionSettings> {
   const write = pendingWrite.then(async () => {
     const current = await readSettings();
-    const next = extensionSettingsSchema.parse({ ...current, ...patch });
+    const next = extensionSettingsSchema.parse({
+      ...current,
+      ...patch,
+      capture: { ...current.capture, ...patch.capture },
+    });
     await browser.storage.local.set({ [settingsKey]: next });
     return next;
   });

@@ -130,3 +130,22 @@ Session sharing starts off in every window. It requests cookie and site permissi
 - Chrome and Firefox MV3 bundles built and packaged. Smoke checks passed in Chrome 157.0.8103.78 and Firefox 160.0 against a loopback fixture. Both verified Light and Dark, opt-in cookie access, and staged submission with only the cookie that matched the file path. Firefox used its native context menu for a magnet and an authenticated HTTP link. The Chrome harness verified menu registration and opened test drafts through the extension’s session storage. It also checked the confirmation at 320 CSS pixels.
 
 Continue with [Phase 8 — Browser interception](plans/phase-08-interception.md), [project context](PROJECT_CONTEXT.md), and the [browser handoff API contract](BROWSER_HANDOFF_API.md).
+
+## Phase 8 — Browser interception and configurable defaults
+
+Implemented on November 19, 2026 against daemon commit `640cc1c`. Settings requests the browser permissions after a compatible daemon connects. It controls capture, confirmation, the default queue and fine-tuning, start mode, and optional browser session context. A missing automatic queue opens confirmation. “Don’t show me again” takes effect after successful handoff and uses the saved defaults for future captures.
+
+Capture matches recent browser download and request metadata, pauses supported HTTP(S) GET downloads, and stages them before canceling the original. The background commits with the staging UUID, reconciles interrupted work, and resumes unsubmitted browser downloads on close, disablement, or fallback. The popup shows pending confirmations that could not open and recovery guidance for originals that could not be resumed. Browser download history stays available.
+
+### Verification
+
+- Type checking, lint, formatting, whitespace checks, and both MV3 ZIP builds passed with Node.js 25.6.1 and pnpm 10.30.0.
+- All 124 Vitest tests passed. Capture tests exercise both browser adapters and cover ask and automatic modes, suppression, settings, unsupported or ambiguous observations, duplicate events, concurrent transfers, missing queues, permission loss, daemon outages, failed pause/cancel/resume, and restart at handoff boundaries.
+- Chrome 157.0.8103.78 and Firefox 160.0 smoke checks passed against a loopback handoff fixture with native downloads. Both exercised confirmed submission, suppression, browser fallback, a signed redirect with observed cookies and referrer, POST bypass, and retained history. Chrome also exercised closing the confirmation. Firefox exercised permission revocation while the original was paused.
+- Headless Chrome used an isolated build copy with capture permissions granted at install. Firefox suppressed its permission doorhanger and exercised the production build’s optional permission API. Permission denial, restart boundaries, and injected failures use the automated tests. The dark confirmation layout was inspected in both browsers.
+
+### Limitations and next session
+
+- The browser can receive data before capture pauses the download. Unobserved, ambiguous, or already complete transfers stay in the browser. Firefox needs partial data to pause safely. Browser danger handling depends on the status that the downloads API exposes at takeover time. Firefox currently reports `safe` for its download danger field. [Firefox download API source](https://github.com/mozilla-firefox/firefox/blob/main/toolkit/components/extensions/parent/ext-downloads.js#L182-L185)
+- Browser and daemon operations have independent lifetimes. A failed browser restore or an unrecoverable commit can require a manual resume or retry in browser download history. Some signed URLs can expire or be single-use on the original server.
+- Live-daemon release verification and packaging review are scheduled for [Phase 9 — Verification and release](plans/phase-09-release.md).

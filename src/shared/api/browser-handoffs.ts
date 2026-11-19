@@ -9,6 +9,15 @@ export function hasHttpStatus(error: unknown, status: number): boolean {
   return error instanceof ArioError && error.detail.status === status;
 }
 
+export function isHandoffRejection(error: unknown): boolean {
+  return (
+    error instanceof ArioError &&
+    error.detail.kind === 'http' &&
+    (error.detail.status ?? 0) >= 400 &&
+    (error.detail.status ?? 0) < 500
+  );
+}
+
 export async function readBrowserCapabilities(
   origin: string,
   signal?: AbortSignal,
@@ -51,12 +60,18 @@ function receiptFor(id: string) {
   return receiptSchema.refine((receipt) => receipt.id === id);
 }
 
+export type HandoffSession = {
+  cookie?: string;
+  referrer?: string;
+};
+
 export function stageBrowserHandoff(
   origin: string,
   id: string,
   url: string,
   options: ImportOptions,
-  cookie: string | undefined,
+  session?: HandoffSession,
+  suggestedFilename?: string,
 ) {
   return requestDaemon(origin, '/browser-handoffs', receiptFor(id), {
     method: 'POST',
@@ -67,7 +82,8 @@ export function stageBrowserHandoff(
           ...options,
           url,
           method: url.startsWith('magnet:') ? undefined : 'GET',
-          session: cookie === undefined ? undefined : { cookie },
+          session,
+          suggested_filename: suggestedFilename,
         },
       },
     },

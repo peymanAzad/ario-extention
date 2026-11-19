@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CaptureNotice } from './capture';
 import type { BrowserCapabilities } from './browser-capabilities';
 import {
   confirmationIdSchema,
@@ -23,7 +24,11 @@ import {
   type DeleteFilesResult,
 } from './download-workflows';
 import type { ExtensionError } from './connection';
-import { settingsPatchSchema, type ExtensionSettings } from './settings';
+import {
+  captureSettingsPatchSchema,
+  settingsPatchSchema,
+  type ExtensionSettings,
+} from './settings';
 import {
   queueIdSchema,
   queueOrderSchema,
@@ -53,6 +58,32 @@ export const backgroundMessageSchema = z.discriminatedUnion('operation', [
     id: confirmationIdSchema,
     options: importOptionsSchema,
     session: z.boolean(),
+    suppressCapture: z.boolean().optional(),
+  }),
+  z.strictObject({
+    operation: z.literal('capture.enable'),
+    enabled: z.boolean(),
+  }),
+  z.strictObject({
+    operation: z.literal('capture.preferences'),
+    patch: captureSettingsPatchSchema,
+  }),
+  z.strictObject({ operation: z.literal('capture.list') }),
+  z.strictObject({
+    operation: z.literal('capture.open'),
+    id: confirmationIdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('capture.dismiss'),
+    id: confirmationIdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('capture.keep'),
+    id: confirmationIdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('capture.retry'),
+    id: confirmationIdSchema,
   }),
   z.strictObject({
     operation: z.literal('dashboard.update'),
@@ -172,6 +203,13 @@ export const backgroundMessageSchema = z.discriminatedUnion('operation', [
 
 export type BackgroundMessage = z.input<typeof backgroundMessageSchema>;
 export type BackgroundResults = {
+  'capture.enable': ExtensionSettings;
+  'capture.preferences': ExtensionSettings;
+  'capture.list': CaptureNotice[];
+  'capture.open': null;
+  'capture.dismiss': null;
+  'capture.keep': ConfirmationOutcome;
+  'capture.retry': ConfirmationOutcome;
   'confirmation.get': ConfirmationDraft | null;
   'confirmation.check': ConfirmationOutcome;
   'confirmation.submit': ConfirmationOutcome;

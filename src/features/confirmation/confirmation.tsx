@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, CircleCheck, File, Magnet } from 'lucide-react';
 import { useState } from 'react';
+import { formatBytes } from '@/features/downloads/dashboard-model';
 import { browser } from 'wxt/browser';
 import {
   FineTuneFields,
@@ -12,6 +13,7 @@ import { sessionPermissions } from '@/shared/browser/browser-session';
 import {
   checkConfirmation,
   getConfirmation,
+  keepCapture,
   submitConfirmation,
 } from '@/shared/browser/messages';
 import { openOptions } from '@/shared/browser/runtime';
@@ -20,6 +22,7 @@ import {
   confirmationIdSchema,
   type ConfirmationDraft,
 } from '@/shared/types/confirmation';
+import { browserRecoveryMessage } from '@/shared/types/capture';
 import { fineTuneSchema } from '@/shared/types/daemon';
 import type { ImportOptions } from '@/shared/types/download-workflows';
 import { mainQueueId } from '@/shared/types/queue-workflows';
@@ -53,6 +56,7 @@ export function Confirmation({
     enabled: Boolean(id),
     retry: false,
     staleTime: Infinity,
+    refetchInterval: ({ state }) => (state.data?.capture ? 1000 : false),
   });
 
   return (
@@ -64,7 +68,7 @@ export function Confirmation({
         <div className="mb-6 flex items-center justify-between gap-3">
           <Brand />
           <span className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground">
-            Browser link
+            {draft.data?.capture ? 'Browser download' : 'Browser link'}
           </span>
         </div>
         <h1 id="confirmation-title">Download with Ario</h1>
@@ -100,7 +104,7 @@ export function Confirmation({
 }
 
 function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
-  const { id, origin, outcome, sessionHost } = draft;
+  const { id, origin, outcome, sessionHost, capture } = draft;
   const queryClient = useQueryClient();
   const capabilities = useBrowserCapabilities(
     origin,
@@ -109,9 +113,14 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
   const supported = supportsBrowserHandoff(capabilities.data);
   const queues = useQueues(origin, supported && outcome.state === 'draft');
   const [selectedQueue, setSelectedQueue] = useState<number>();
-  const [override, setOverride] = useState(false);
+  const [override, setOverride] = useState(
+    capture?.options.finetune_override != null,
+  );
+  const [suppress, setSuppress] = useState(false);
   const [fields, setFields] = useState(() =>
-    fineTuneInput(fineTuneSchema.parse({})),
+    fineTuneInput(
+      capture?.options.finetune_override ?? fineTuneSchema.parse({}),
+    ),
   );
   const [session, setSession] = useState<
     'off' | 'requesting' | 'on' | 'denied'
@@ -119,19 +128,28 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
   const url = new URL(draft.url);
   const magnet = url.protocol === 'magnet:';
   const FileIcon = magnet ? Magnet : File;
-  const queueId = queues.data?.some(
-    ({ id }) => id === (selectedQueue ?? mainQueueId),
-  )
-    ? (selectedQueue ?? mainQueueId)
+  const preferredQueue = capture?.options.queue_id ?? mainQueueId;
+  const candidateQueue = selectedQueue ?? preferredQueue;
+  const queueId = queues.data?.some(({ id }) => id === candidateQueue)
+    ? candidateQueue
     : undefined;
+  const fileName = capture?.fileName ?? linkName(url);
+  const startImmediately = capture?.options.start_immediately ?? true;
   const fineTune = parseFineTune(fields);
   const useSession = session === 'on';
 
   const submission = useMutation({
-    mutationFn: (options: ImportOptions | null) =>
-      options
-        ? submitConfirmation(id, options, useSession)
-        : checkConfirmation(id),
+    mutationFn: (options: ImportOptions | 'keep' | null) => {
+      if (options === 'keep') return keepCapture(id);
+      return options
+        ? submitConfirmation(
+            id,
+            options,
+            useSession,
+            capture ? suppress : undefined,
+          )
+        : checkConfirmation(id);
+    },
     onSuccess: (next) => {
       queryClient.setQueryData(confirmationKey(id), {
         ...draft,
@@ -179,14 +197,23 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
           <FileIcon size={17} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium" title={linkName(url)}>
-            <bdi>{linkName(url)}</bdi>
+          <p className="truncate text-xs font-medium" title={fileName}>
+            <bdi>{fileName}</bdi>
           </p>
           <p
             className="mt-1 max-h-16 overflow-auto wrap-anywhere text-[11px] text-muted-foreground"
             tabIndex={0}
           >
-            <bdi>{draft.url}</bdi>
+            <bdi>
+              {capture
+                ? [
+                    url.hostname,
+                    capture.totalBytes ? formatBytes(capture.totalBytes) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : draft.url}
+            </bdi>
           </p>
         </div>
       </div>
@@ -196,7 +223,23 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
           {submission.error.message}
         </p>
       )}
-      {outcome.state === 'committed' ? (
+      {outcome.state === 'browser' || outcome.state === 'recovery' ? (
+        <>
+          <p
+            role={outcome.state === 'recovery' ? 'alert' : 'status'}
+            className="text-xs text-muted-foreground"
+          >
+            {outcome.state === 'recovery'
+              ? browserRecoveryMessage
+              : 'The download is continuing in your browser.'}
+          </p>
+          <div className="mt-6 flex justify-end">
+            <Button type="button" onClick={closeWindow}>
+              Close
+            </Button>
+          </div>
+        </>
+      ) : outcome.state === 'committed' ? (
         <>
           <p role="status" className="flex items-center gap-2 text-xs">
             <CircleCheck className="size-4 text-primary" aria-hidden="true" />{' '}
@@ -216,7 +259,7 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
           </p>
           <div className="mt-6 flex flex-wrap justify-between gap-2">
             <Button type="button" variant="ghost" onClick={closeWindow}>
-              Back to browser
+              {capture ? 'Close' : 'Back to browser'}
             </Button>
             <Button
               type="button"
@@ -231,7 +274,7 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            send(true);
+            send(startImmediately);
           }}
         >
           {problem ? (
@@ -273,6 +316,11 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
                   ))}
                 </select>
               </div>
+              {capture && !queueId && selectedQueue === undefined && (
+                <p className="text-[11px] text-muted-foreground">
+                  Your default queue is unavailable. Choose a queue to continue.
+                </p>
+              )}
               <div className="workflow-field">
                 <label htmlFor="confirmation-settings">Download settings</label>
                 <select
@@ -295,7 +343,7 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
                   inherit.
                 </p>
               )}
-              {!magnet && (
+              {!capture && !magnet && (
                 <div>
                   <label className="flex items-start gap-2 text-xs">
                     <input
@@ -327,6 +375,27 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
                   </p>
                 </div>
               )}
+              {capture?.session && (
+                <p className="text-[11px] text-muted-foreground">
+                  Ario will use the browser session for this request.
+                </p>
+              )}
+              {capture && !capture.automatic && (
+                <label className="flex items-start gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-primary"
+                    checked={suppress}
+                    onChange={(event) => setSuppress(event.target.checked)}
+                  />
+                  <span>
+                    Don’t show me again
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      Future captures use your defaults in Settings.
+                    </span>
+                  </span>
+                </label>
+              )}
             </fieldset>
           )}
 
@@ -336,9 +405,11 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
               variant="ghost"
               className="px-0"
               disabled={submission.isPending}
-              onClick={closeWindow}
+              onClick={() =>
+                capture ? submission.mutate('keep') : closeWindow()
+              }
             >
-              Back to browser
+              {capture ? 'Keep in browser' : 'Back to browser'}
             </Button>
             {problem ? (
               <div className="flex flex-wrap gap-2">
@@ -365,20 +436,22 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
               !loading && (
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    type="button"
-                    variant="outline"
+                    type={startImmediately ? 'button' : 'submit'}
+                    variant={startImmediately ? 'outline' : 'default'}
                     disabled={
                       !queueId ||
                       (override && !fineTune.success) ||
                       submission.isPending ||
                       session === 'requesting'
                     }
-                    onClick={() => send(false)}
+                    onClick={startImmediately ? () => send(false) : undefined}
                   >
                     Save for later
                   </Button>
                   <Button
-                    type="submit"
+                    type={startImmediately ? 'submit' : 'button'}
+                    variant={startImmediately ? 'default' : 'outline'}
+                    onClick={startImmediately ? undefined : () => send(true)}
                     disabled={
                       !queueId ||
                       (override && !fineTune.success) ||

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
@@ -23,6 +25,7 @@ const context = await chromium.launchPersistentContext('', {
 });
 
 let daemon;
+let captureBuild;
 try {
   daemon = await startTestDaemon();
   const browser = context.browser();
@@ -346,6 +349,151 @@ try {
         session: { cookie: 'ario_fixture=allowed' },
       },
     );
+    await privateConfirmation.getByRole('button', { name: 'Close' }).click();
+    // Headless Chrome cannot accept the native optional extension permission
+    // dialog. Exercise capture with an isolated copy granted access at install.
+    captureBuild = await mkdtemp(join(tmpdir(), 'ario-capture-chrome-'));
+    const captureExtension = join(captureBuild, 'extension');
+    await cp(directory, captureExtension, { recursive: true });
+    await writeFile(
+      join(captureExtension, 'manifest.json'),
+      JSON.stringify({
+        ...manifest,
+        permissions: [...manifest.permissions, 'downloads', 'webRequest'],
+        host_permissions: [
+          ...manifest.host_permissions,
+          ...manifest.optional_host_permissions,
+        ],
+      }),
+    );
+    const captureCdp = await browser.newBrowserCDPSession();
+    const { id: captureExtensionId } = await captureCdp.send(
+      'Extensions.loadUnpacked',
+      { path: captureExtension },
+    );
+    await captureCdp.send('Browser.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: join(captureBuild, 'downloads'),
+      eventsEnabled: true,
+    });
+    await captureCdp.detach();
+    const captureOptions = await context.newPage();
+    await captureOptions.goto(
+      `chrome-extension://${captureExtensionId}/options.html`,
+    );
+    await captureOptions
+      .getByRole('textbox', { name: 'Server address' })
+      .fill(daemon.origin);
+    await captureOptions.getByRole('button', { name: 'Save address' }).click();
+    const enable = captureOptions.getByRole('switch', {
+      name: 'Capture browser downloads',
+    });
+    await enable.click();
+    await captureOptions.waitForFunction(
+      () =>
+        document.querySelector('[aria-label="Capture browser downloads"]')
+          .checked,
+    );
+    await source.goto(`${daemon.origin}/capture-fixture`);
+
+    const captureWindow = async (link) => {
+      const opened = context.waitForEvent('page', { timeout: 7000 });
+      await source.locator(link).click();
+      const confirmation = await opened;
+      await confirmation
+        .getByText('Browser download', { exact: true })
+        .waitFor();
+      return confirmation;
+    };
+    const kept = await captureWindow('#capture-keep');
+    await kept.getByRole('button', { name: 'Keep in browser' }).click();
+    await kept
+      .getByText('The download is continuing in your browser.')
+      .waitFor();
+    await kept.getByRole('button', { name: 'Close' }).click();
+    const closedCapture = await captureWindow('#capture-close');
+    await closedCapture.close();
+    const asked = await captureWindow('#capture-ask');
+    await asked.setViewportSize({ width: 500, height: 600 });
+    await asked.screenshot({ path: 'test-results/capture-chrome-dark.png' });
+    await asked.getByLabel('Queue', { exact: true }).selectOption('2');
+    await asked.getByRole('checkbox', { name: /Don’t show me again/ }).check();
+    await asked.getByRole('button', { name: 'Save for later' }).click();
+    await asked.getByText('Added to Ario.').waitFor({ timeout: 10_000 });
+    await asked.getByRole('button', { name: 'Close' }).click();
+    assert.equal(
+      await captureOptions
+        .getByRole('switch', { name: 'Ask before downloading' })
+        .isChecked(),
+      false,
+    );
+    await captureOptions
+      .getByRole('switch', { name: 'Use browser session' })
+      .click();
+    await captureOptions.waitForFunction(
+      () =>
+        document.querySelector('[aria-label="Use browser session"]').checked,
+    );
+    await source.locator('#capture-automatic').click();
+    for (
+      let attempt = 0;
+      attempt < 70 && daemon.captureHandoffs()[1]?.state !== 'committed';
+      attempt++
+    )
+      await delay(100);
+    const captures = daemon.captureHandoffs();
+    assert.deepEqual(
+      captures.map(({ payload, state }) => [
+        payload.url,
+        payload.queue_id,
+        payload.start_immediately,
+        payload.session,
+        state,
+      ]),
+      [
+        [
+          `${daemon.origin}/capture-files/ask`,
+          2,
+          false,
+          undefined,
+          'committed',
+        ],
+        [
+          `${daemon.origin}/capture-files/cookie?signature=x%2Fz%2B`,
+          1,
+          true,
+          {
+            cookie: 'capture_session=fixture',
+            referrer: `${daemon.origin}/capture-fixture`,
+          },
+          'committed',
+        ],
+      ],
+    );
+    await source.locator('#capture-post').click();
+    await captureOptions.waitForFunction(async () => {
+      const downloads = await globalThis.chrome.downloads.search({});
+      return (
+        ['/keep', '/post', '/close'].every((suffix) =>
+          downloads.some(
+            ({ url, state }) => url.endsWith(suffix) && state === 'complete',
+          ),
+        ) &&
+        downloads.some(
+          ({ url, error, state }) =>
+            url.endsWith('/ask') &&
+            state === 'interrupted' &&
+            error === 'USER_CANCELED',
+        )
+      );
+    });
+    assert.equal(daemon.captureHandoffs().length, 2);
+    await enable.click();
+    await captureOptions.waitForFunction(
+      () =>
+        !document.querySelector('[aria-label="Capture browser downloads"]')
+          .checked,
+    );
   }
 
   daemon.verify();
@@ -353,4 +501,5 @@ try {
 } finally {
   await context.close();
   await daemon?.close();
+  if (captureBuild) await rm(captureBuild, { recursive: true, force: true });
 }
