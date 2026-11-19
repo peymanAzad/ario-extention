@@ -1,7 +1,13 @@
 import { browser, type Browser } from 'wxt/browser';
 import { requestDaemon } from '@/shared/api/transport';
+import { writeDashboardFilters } from '@/shared/storage/dashboard';
 import { updateSettings } from '@/shared/storage/settings';
-import { healthSchema, daemonSettingsSchema } from '@/shared/types/daemon';
+import {
+  healthSchema,
+  daemonSettingsSchema,
+  downloadLiveStatusSchema,
+  queueSchema,
+} from '@/shared/types/daemon';
 import { ArioError } from '@/shared/types/connection';
 import {
   backgroundMessageSchema,
@@ -42,6 +48,20 @@ export function createBackgroundHandler() {
     message: ReturnType<typeof backgroundMessageSchema.parse>,
     sender: Browser.runtime.MessageSender,
   ): Promise<Reply> {
+    if (message.operation === 'dashboard.update') {
+      try {
+        return { ok: true, data: await writeDashboardFilters(message.filters) };
+      } catch {
+        return {
+          ok: false,
+          error: {
+            kind: 'storage',
+            message: 'Could not remember dashboard filters.',
+          },
+        };
+      }
+    }
+
     if (message.operation === 'settings.update') {
       try {
         return { ok: true, data: await updateSettings(message.patch) };
@@ -79,20 +99,45 @@ export function createBackgroundHandler() {
     requests.set(requestKey, controller);
     try {
       const options = { signal: controller.signal };
-      const data =
-        message.operation === 'daemon.health'
-          ? await requestDaemon(
-              message.origin,
-              '/health',
-              healthSchema,
-              options,
-            )
-          : await requestDaemon(
-              message.origin,
-              '/settings',
-              daemonSettingsSchema,
-              options,
-            );
+      let data: BackgroundResults[
+        | 'daemon.health'
+        | 'daemon.settings'
+        | 'daemon.downloads'
+        | 'daemon.queues'];
+      switch (message.operation) {
+        case 'daemon.health':
+          data = await requestDaemon(
+            message.origin,
+            '/health',
+            healthSchema,
+            options,
+          );
+          break;
+        case 'daemon.settings':
+          data = await requestDaemon(
+            message.origin,
+            '/settings',
+            daemonSettingsSchema,
+            options,
+          );
+          break;
+        case 'daemon.downloads':
+          data = await requestDaemon(
+            message.origin,
+            '/downloads',
+            downloadLiveStatusSchema.array(),
+            options,
+          );
+          break;
+        case 'daemon.queues':
+          data = await requestDaemon(
+            message.origin,
+            '/queues',
+            queueSchema.array(),
+            options,
+          );
+          break;
+      }
       return { ok: true, data };
     } catch (error) {
       return {

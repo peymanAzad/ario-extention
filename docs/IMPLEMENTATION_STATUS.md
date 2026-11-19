@@ -35,6 +35,36 @@ The background accepts named health, settings, and cancellation messages from tr
 
 ### Scope and next session
 
-Phases 3–9 are pending. Capture preferences are stored with capture disabled, confirmation enabled, Main Queue, inherited settings, immediate start, and session sharing disabled. Capture behavior and controls are scheduled for later phases. The download popup reports the connection state. Queue and download schemas are available for the dashboard.
+At the end of Phase 2, Phases 3–9 were pending. Capture preferences are stored with capture disabled, confirmation enabled, Main Queue, inherited settings, immediate start, and session sharing disabled. Capture behavior and controls are scheduled for later phases. The download popup reports the connection state. Queue and download schemas are available for the dashboard.
 
-Begin with [Phase 3 — Download dashboard](plans/phase-03-dashboard.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+Phase 2 handed off to [Phase 3 — Download dashboard](plans/phase-03-dashboard.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+
+## Phase 3 — Download dashboard
+
+Implemented on November 19, 2026. Rechecked download, queue, filter/sort, live-progress, and health contracts against the unchanged daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. This phase adds read-only `daemon.downloads` and `daemon.queues` messages. Production data comes only from the daemon; sample downloads remain in test fixtures.
+
+The popup follows the reference’s sidebar, mint accent, compact file rows, progress tracks, and footer in both themes. It offers All Queues and individual active/paused queues; all six categories and status variants; combined case-insensitive filename/URL search; and name, size, creation-time, and queue-position sorting in both directions. Filters, search, and sort survive reopening. A deleted queue selection resets to All Queues after a successful queue load. Unknown sizes/ETA, torrent metadata acquisition, download error messages, aggregate speed, active count, connection state, and optional proxy health are displayed.
+
+Health, downloads, and queues refresh every second while visible. During outages, each query retains its last successful response, the popup labels the view as last known, and Reconnect retries all three resources. Origin-specific caches prevent data from the old daemon appearing under a newly saved address. Fixed-height virtualization bounds rendered rows; keyboard users can Tab through navigation and controls and scroll the list with Arrow/Page/Home/End keys. Progress has accessible labels and values.
+
+### Verification
+
+| Check                                                                  | Result                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js 24.22.3 and pnpm 10.30.0                                       | Used for final type checking, tests, packaging, and browser checks                                                                                                                                                                                                                                                            |
+| `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `git diff --check` | Passed                                                                                                                                                                                                                                                                                                                        |
+| `pnpm test`                                                            | 63 tests passed, including all wire statuses, combined queue/category/status/search, both directions of all sorts, missing/deleted queues, loading/empty/failure states, reconnect, origin isolation, visibility/unmount polling, persistence after closure, proxy variants, keyboard controls, and 10,000-row virtualization |
+| `pnpm zip`                                                             | Built and packaged both Chrome and Firefox MV3 targets                                                                                                                                                                                                                                                                        |
+| `pnpm smoke:chrome`                                                    | Passed in Chrome 157.0.8103.78: real 780 × 580 toolbar popup, loopback reads, combined filters and remembered search, determinate/unknown progress, outage/reconnect, 10,000 rows, Home/End navigation, scripted visibility suspension, and narrow overflow                                                                   |
+| `pnpm smoke:firefox`                                                   | Passed in Firefox 160.0: installed MV3 ZIP, loopback reads, status/queue/URL search, remembered search after reload, outage/reconnect, 10,000 rows, Home/End navigation, and narrow overflow                                                                                                                                  |
+| Visual QA                                                              | Inspected Chrome and Firefox light/dark layouts, Chrome outage view, and narrow layouts. Screenshots are generated under ignored `test-results/dashboard-*.png`.                                                                                                                                                              |
+
+### Limitations and next session
+
+- Browser checks used an isolated HTTP fixture with actual extension-to-background-to-loopback requests. Phase 3 did not launch or modify a real daemon; Phase 2’s real-daemon evidence remains recorded above.
+- Last successful server data is retained within the open UI’s Query cache, not persisted after the popup closes. Only dashboard UI preferences persist. Large lists still require the daemon’s complete unpaginated snapshot; virtualization bounds DOM rendering, not network payload or local filtering work.
+- Headless Chrome reports background tabs as visible, so its harness dispatches explicit visibility changes. Render tests independently verify polling pauses when hidden, resumes when visible, and stops on unmount.
+- Proxy fields omitted by the daemon show “not reported”; no proxy-enabled assumption is made. Metadata acquisition is inferred from a torrent/magnet without a known positive total because the current API has no explicit metadata flag.
+- Phases 4–9 remain pending. Adding downloads, row actions/details, queue editing, and browser capture are outside this read-only phase. No new browser permissions were added. The plan documents and design reference are preserved.
+
+Begin the next session with [Phase 4 — Download workflows](plans/phase-04-downloads.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).

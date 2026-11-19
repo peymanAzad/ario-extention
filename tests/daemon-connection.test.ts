@@ -244,3 +244,39 @@ describe('background message boundary', () => {
     });
   });
 });
+
+it('reads validated dashboard collections through named, read-only background operations', async () => {
+  const handler = createBackgroundHandler();
+  const sender = {
+    id: fakeBrowser.runtime.id,
+    url: fakeBrowser.runtime.getURL('/popup.html'),
+    frameId: 0,
+  };
+  for (const operation of ['daemon.downloads', 'daemon.queues'] as const) {
+    const message = {
+      operation,
+      requestId: crypto.randomUUID(),
+      origin: defaultDaemonOrigin,
+    };
+    expect(handler({ ...message, method: 'DELETE' }, sender)).toBeUndefined();
+    await expect(handler(message, sender)).resolves.toMatchObject({
+      ok: true,
+      data: expect.any(Array),
+    });
+  }
+  server.use(
+    http.get(`${defaultDaemonOrigin}/downloads`, () =>
+      HttpResponse.json([{ download: { status: 'Error' } }]),
+    ),
+  );
+  await expect(
+    handler(
+      {
+        operation: 'daemon.downloads',
+        requestId: crypto.randomUUID(),
+        origin: defaultDaemonOrigin,
+      },
+      sender,
+    ),
+  ).resolves.toMatchObject({ ok: false, error: { kind: 'invalid-response' } });
+});

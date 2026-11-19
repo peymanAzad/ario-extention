@@ -12,12 +12,17 @@ export async function startTestDaemon() {
   }
 
   const requests = new Set();
+  const counts = new Map();
+  let offline = false;
+  let large = false;
   const health = {
     server: 'ok',
     aria2_reachable: true,
     tui_managed: false,
-    download_speed: 0,
-    active_downloads: 0,
+    download_speed: 524288,
+    active_downloads: 2,
+    proxy_reachable: true,
+    proxy_data: true,
   };
   const settings = {
     default_download_location: '/tmp/ario-smoke/Downloads',
@@ -33,19 +38,109 @@ export async function startTestDaemon() {
     start_daemon_on_login: false,
     stop_daemon_on_close: false,
   };
+  const queue = {
+    id: 1,
+    name: 'Main Queue',
+    position: 0,
+    status: 'Active',
+    settings: {
+      max_concurrent_downloads: 2,
+      max_retries: 3,
+      default_finetune: {},
+    },
+    scheduler: {
+      enabled: false,
+      run_missed_on_startup: false,
+      recurrence: {
+        Once: { start: '2026-11-19T00:00:00Z', end: '2026-11-20T00:00:00Z' },
+      },
+    },
+    created_at: '2026-11-19T00:00:00Z',
+  };
+  const statuses = [
+    'Active',
+    'Paused',
+    'Completed',
+    'Pending',
+    { Error: 'Fixture server refused connection' },
+    'Removed',
+    'Active',
+  ];
+  const names = [
+    'Movie.mp4',
+    'Song.flac',
+    'Report.pdf',
+    'Backup.zip',
+    'Installer.bin',
+    'Removed.bin',
+    null,
+  ];
+  const categories = [
+    'Video',
+    'Music',
+    'Document',
+    'Archive',
+    'Program',
+    'Other',
+    'Other',
+  ];
+  function download(index) {
+    return {
+      download: {
+        id: index + 1,
+        aria2_gid: null,
+        url:
+          index === 6
+            ? 'magnet:?xt=urn:btih:fixture'
+            : `https://example.test/file-${index + 1}`,
+        filename: large ? `File-${index + 1}.bin` : names[index],
+        destination_path: '/tmp/ario-smoke/Downloads',
+        source_type: index === 6 ? 'Magnet' : 'Http',
+        category: categories[index % 7],
+        status: statuses[index % 7],
+        paused_by_scheduler: false,
+        manually_started: false,
+        size: index === 6 ? null : 1048576,
+        completed_length: 524288,
+        queue_id: [3, 4].includes(index) ? 2 : 1,
+        position_in_queue: index,
+        finetune: {},
+        created_at: '2026-11-19T00:00:00Z',
+        started_at: null,
+        completed_at: null,
+      },
+      completed_length: 524288,
+      download_speed: index % 7 === 0 ? 524288 : 0,
+      eta_seconds: index % 7 === 0 ? 1 : null,
+    };
+  }
   const server = createServer((request, response) => {
     requests.add(`${request.method} ${request.url}`);
-    const body =
-      request.url === '/health'
-        ? health
-        : request.url === '/settings'
-          ? settings
-          : null;
-    if (request.method !== 'GET' || body === null) {
+    counts.set(request.url, (counts.get(request.url) ?? 0) + 1);
+    if (offline) {
+      response.writeHead(503, { 'Content-Type': 'application/json' }).end(
+        JSON.stringify({
+          result: 'error',
+          message: 'Fixture daemon unavailable',
+        }),
+      );
+      return;
+    }
+    const body = {
+      '/health': health,
+      '/settings': settings,
+      '/downloads': Array.from({ length: large ? 10000 : 7 }, (_, index) =>
+        download(index),
+      ),
+      '/queues': [
+        queue,
+        { ...queue, id: 2, name: 'Night shift', position: 1, status: 'Paused' },
+      ],
+    }[request.url];
+    if (request.method !== 'GET' || body === undefined) {
       response.writeHead(404).end();
       return;
     }
-
     // No CORS header. The request must use the extension's loopback host access.
     response
       .writeHead(200, { 'Content-Type': 'application/json' })
@@ -56,8 +151,26 @@ export async function startTestDaemon() {
 
   return {
     origin: `http://127.0.0.1:${server.address().port}`,
+    fixture: true,
+    setOffline(value) {
+      offline = value;
+    },
+    setLarge(value) {
+      large = value;
+    },
+    downloadRequests() {
+      return counts.get('/downloads') ?? 0;
+    },
     verify() {
-      assert.deepEqual(requests, new Set(['GET /health', 'GET /settings']));
+      assert.deepEqual(
+        requests,
+        new Set([
+          'GET /health',
+          'GET /settings',
+          'GET /downloads',
+          'GET /queues',
+        ]),
+      );
     },
     async close() {
       await new Promise((resolve, reject) =>

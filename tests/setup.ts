@@ -7,6 +7,14 @@ import { daemonHandlers } from './fixtures/daemon';
 
 vi.stubGlobal('browser', fakeBrowser);
 vi.stubGlobal('chrome', fakeBrowser);
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
 
 export const server = setupServer(...daemonHandlers);
 

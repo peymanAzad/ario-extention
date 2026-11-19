@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
 import { startTestDaemon } from './daemon.mjs';
@@ -83,7 +85,9 @@ try {
     .waitFor();
   await options.getByRole('button', { name: 'Save address' }).click();
   await options.getByRole('heading', { name: 'Download locations' }).waitFor();
+  await popup.bringToFront();
   await popup.getByText('Daemon connected', { exact: true }).waitFor();
+  await options.bringToFront();
   await options.getByText('Dark', { exact: true }).click();
   await popup.waitForFunction(
     () => document.documentElement.dataset.appearance === 'dark',
@@ -101,6 +105,107 @@ try {
   );
   assert.equal(await background(), lightBackground);
 
+  await popup.bringToFront();
+  await popup.setViewportSize({ width: 780, height: 580 });
+  if (daemon.fixture) {
+    await popup
+      .getByRole('article', { name: 'Movie.mp4', exact: true })
+      .waitFor();
+    assert.equal(
+      await popup
+        .getByRole('progressbar', { name: 'Movie.mp4 progress' })
+        .getAttribute('aria-valuenow'),
+      '50',
+    );
+    assert.equal(
+      await popup
+        .getByRole('progressbar', {
+          name: 'magnet:?xt=urn:btih:fixture progress',
+        })
+        .getAttribute('aria-valuenow'),
+      null,
+    );
+    await popup.getByRole('button', { name: 'Night shift · Paused' }).click();
+    await popup.getByRole('button', { name: 'Programs', exact: true }).click();
+    await popup.getByLabel('Filter download status').selectOption('Error');
+    await popup.getByRole('searchbox').fill('EXAMPLE.TEST/FILE-5');
+    await popup.getByText('Installer.bin', { exact: true }).waitFor();
+    assert.equal(await popup.getByRole('article').count(), 1);
+    await popup.reload();
+    await popup.getByText('Installer.bin', { exact: true }).waitFor();
+    assert.equal(
+      await popup.getByRole('searchbox').inputValue(),
+      'EXAMPLE.TEST/FILE-5',
+    );
+    await popup.getByRole('searchbox').fill('');
+    await popup
+      .getByRole('button', { name: 'All downloads', exact: true })
+      .click();
+    await popup
+      .getByRole('button', { name: 'All queues', exact: true })
+      .click();
+    await popup.getByLabel('Filter download status').selectOption('');
+    await popup.getByLabel('Sort downloads').selectOption('Name');
+    await popup.getByRole('button', { name: 'Sort ascending' }).click();
+    const region = popup.getByRole('region', { name: 'Download list' });
+    await region.focus();
+    await popup.keyboard.press('End');
+    await popup.keyboard.press('Home');
+    assert.equal(await region.evaluate((element) => element.scrollTop), 0);
+    await mkdir('test-results', { recursive: true });
+    await popup.screenshot({ path: 'test-results/dashboard-chrome-light.png' });
+    await popup.evaluate(
+      () => (document.documentElement.dataset.appearance = 'dark'),
+    );
+    await popup.screenshot({ path: 'test-results/dashboard-chrome-dark.png' });
+    await popup.evaluate(
+      () => (document.documentElement.dataset.appearance = 'light'),
+    );
+    daemon.setOffline(true);
+    await popup
+      .getByText('Live updates interrupted · showing last known data', {
+        exact: true,
+      })
+      .waitFor();
+    assert.ok((await popup.getByRole('article').count()) > 0);
+    await popup.screenshot({ path: 'test-results/dashboard-chrome-stale.png' });
+    daemon.setOffline(false);
+    await popup.getByRole('button', { name: 'Reconnect' }).click();
+    await popup
+      .getByText('Live updates interrupted · showing last known data', {
+        exact: true,
+      })
+      .waitFor({ state: 'hidden' });
+    daemon.setLarge(true);
+    await popup.getByText('10000 results', { exact: true }).waitFor();
+    assert.ok((await popup.getByRole('listitem').count()) < 20);
+    await region.focus();
+    await popup.keyboard.press('End');
+    await popup.waitForFunction(() =>
+      document.querySelector('li[aria-posinset="10000"]'),
+    );
+    await popup.keyboard.press('Home');
+    // Headless Chrome reports background tabs as visible. Exercise the real
+    // visibility event explicitly, in addition to the lifecycle render test.
+    await popup.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        value: 'hidden',
+      });
+      document.dispatchEvent(new globalThis.Event('visibilitychange'));
+    });
+    await delay(300);
+    const hiddenRequests = daemon.downloadRequests();
+    await delay(1300);
+    assert.equal(daemon.downloadRequests(), hiddenRequests);
+    await popup.evaluate(() => {
+      Reflect.deleteProperty(document, 'visibilityState');
+      document.dispatchEvent(new globalThis.Event('visibilitychange'));
+    });
+    daemon.setLarge(false);
+    await popup.getByText('7 results', { exact: true }).waitFor();
+  }
+
   await popup.setViewportSize({ width: 320, height: 260 });
   assert.equal(
     await popup.locator('body').evaluate((body) => body.scrollWidth),
@@ -112,6 +217,7 @@ try {
       .evaluate((main) => getComputedStyle(main).overflowY),
     'auto',
   );
+  await popup.screenshot({ path: 'test-results/dashboard-chrome-narrow.png' });
   await popup.goto(`${origin}/confirmation.html`);
   await popup.getByRole('heading', { name: 'Download with Ario' }).waitFor();
 

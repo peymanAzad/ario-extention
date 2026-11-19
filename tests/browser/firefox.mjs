@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { By, until } from 'selenium-webdriver';
+import { By, Key, until } from 'selenium-webdriver';
 import firefox from 'selenium-webdriver/firefox.js';
 import app from '../../package.json' with { type: 'json' };
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
@@ -127,6 +128,98 @@ try {
   await driver.switchTo().window(popupHandle);
   await waitForTheme('light');
   assert.equal(await background(), lightBackground);
+  if (daemon.fixture) {
+    const click = (selector) => driver.findElement(By.css(selector)).click();
+    await waitForText('Movie.mp4');
+    assert.equal(
+      await driver
+        .findElement(By.css('[aria-label="Movie.mp4 progress"]'))
+        .getAttribute('aria-valuenow'),
+      '50',
+    );
+    await click('button[aria-label="Night shift · Paused"]');
+    await click(
+      'select[aria-label="Filter download status"] option[value="Error"]',
+    );
+    await driver
+      .findElement(By.css('input[type="search"]'))
+      .sendKeys('EXAMPLE.TEST/FILE-5');
+    await waitForText('Installer.bin');
+    assert.equal((await driver.findElements(By.css('article'))).length, 1);
+    await driver.navigate().refresh();
+    await waitForText('Installer.bin');
+    assert.equal(
+      await driver
+        .findElement(By.css('input[type="search"]'))
+        .getAttribute('value'),
+      'EXAMPLE.TEST/FILE-5',
+    );
+    await driver.findElement(By.css('input[type="search"]')).clear();
+    // clear() does not reliably emit React's input event in Firefox.
+    await driver
+      .findElement(By.css('input[type="search"]'))
+      .sendKeys(' ', Key.BACK_SPACE);
+    await driver
+      .findElement(By.xpath('//button[span[text()="All queues"]]'))
+      .click();
+    await click('select[aria-label="Filter download status"] option[value=""]');
+    await waitForText('Movie.mp4');
+    await driver.manage().window().setRect({ width: 900, height: 800 });
+    await mkdir('test-results', { recursive: true });
+    await writeFile(
+      'test-results/dashboard-firefox-light.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+    await driver.switchTo().window(optionsHandle);
+    await driver.findElement(By.xpath('//label[span[text()="Dark"]]')).click();
+    await driver.switchTo().window(popupHandle);
+    await waitForTheme('dark');
+    await writeFile(
+      'test-results/dashboard-firefox-dark.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+    daemon.setOffline(true);
+    await waitForText('Live updates interrupted · showing last known data');
+    assert.ok((await driver.findElements(By.css('article'))).length > 0);
+    daemon.setOffline(false);
+    await (await button('Reconnect')).click();
+    await driver.wait(
+      async () =>
+        (await driver.findElements(By.css('.dashboard-outage'))).length === 0,
+      10000,
+    );
+    daemon.setLarge(true);
+    await waitForText('10000 results');
+    assert.ok((await driver.findElements(By.css('li'))).length < 20);
+    const region = await driver.findElement(
+      By.css('[aria-label="Download list"]'),
+    );
+    await region.sendKeys(Key.END);
+    await driver.wait(
+      until.elementLocated(By.css('li[aria-posinset="10000"]')),
+      10000,
+    );
+    await region.sendKeys(Key.HOME);
+    daemon.setLarge(false);
+    await waitForText('7 results');
+    await driver.manage().window().setRect({ width: 450, height: 600 });
+    assert.equal(
+      await driver.executeScript(
+        'return document.body.scrollWidth <= innerWidth',
+      ),
+      true,
+    );
+    await writeFile(
+      'test-results/dashboard-firefox-narrow.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+  }
+  await driver.switchTo().window(optionsHandle);
+  await driver.findElement(By.xpath('//label[span[text()="Light"]]')).click();
+  await driver.switchTo().window(popupHandle);
   await driver.get(`${origin}/confirmation.html`);
   await heading('Download with Ario');
   await waitForTheme('light');

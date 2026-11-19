@@ -5,6 +5,7 @@ import type {
   BackgroundReply,
   BackgroundResults,
 } from '@/shared/types/messages';
+import type { DashboardFilters } from '@/shared/types/dashboard';
 import type { SettingsPatch } from '@/shared/types/settings';
 
 type Operation = keyof BackgroundResults;
@@ -36,7 +37,8 @@ async function send<K extends Operation>(
   return reply.data;
 }
 
-type DaemonOperation = 'daemon.health' | 'daemon.settings';
+type DaemonOperation =
+  'daemon.health' | 'daemon.settings' | 'daemon.downloads' | 'daemon.queues';
 
 async function daemonRequest<K extends DaemonOperation>(
   operation: K,
@@ -69,3 +71,12 @@ export const getDaemonSettings = (origin: string, signal?: AbortSignal) =>
 
 export const saveSettings = (patch: SettingsPatch) =>
   send('settings.update', { patch });
+
+export const getDownloads = (origin: string, signal?: AbortSignal) =>
+  daemonRequest('daemon.downloads', origin, signal);
+
+export const getQueues = (origin: string, signal?: AbortSignal) =>
+  daemonRequest('daemon.queues', origin, signal);
+
+export const saveDashboardFilters = (filters: DashboardFilters) =>
+  send('dashboard.update', { filters });

@@ -15,7 +15,7 @@ it('renders the downloads shell and opens browser settings', async () => {
   expect(
     screen.getByRole('complementary', { name: 'Library' }),
   ).toHaveTextContent('All downloads');
-  expect(screen.queryByRole('list')).toBeNull();
+  expect(screen.queryByText('Movie.mp4')).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Open settings' }));
 
   expect(openOptions).toHaveBeenCalledOnce();

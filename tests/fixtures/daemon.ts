@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import { dashboardDownloads, mainQueue, nightQueue } from './dashboard';
 import { defaultDaemonOrigin } from '@/shared/api/endpoint';
 
 export const healthUrl = `${defaultDaemonOrigin}/health`;
@@ -26,6 +27,12 @@ export const daemonSettings = {
 };
 
 export const daemonHandlers = [
+  http.get(`${defaultDaemonOrigin}/downloads`, () =>
+    HttpResponse.json(dashboardDownloads),
+  ),
+  http.get(`${defaultDaemonOrigin}/queues`, () =>
+    HttpResponse.json([mainQueue, nightQueue]),
+  ),
   http.get(healthUrl, () => HttpResponse.json(health)),
   http.get(`${defaultDaemonOrigin}/settings`, () =>
     HttpResponse.json(daemonSettings),
