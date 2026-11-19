@@ -1,4 +1,17 @@
-import { AppWindow, Archive, File, FileText, Film, Music2 } from 'lucide-react';
+import {
+  AppWindow,
+  Archive,
+  Ellipsis,
+  File,
+  FileText,
+  Film,
+  Music2,
+  Pause,
+  Play,
+  RotateCw,
+} from 'lucide-react';
+import { Button } from '@/shared/ui/button';
+import { downloadActions } from './workflow-model';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { DownloadLiveStatus, Queue } from '@/shared/types/daemon';
 import {
@@ -20,16 +33,29 @@ export const categoryIcons = {
   Other: File,
 };
 
+type RowControls = {
+  unavailable: boolean;
+  pending: (item: DownloadLiveStatus) => boolean;
+  onAction: (item: DownloadLiveStatus) => void;
+  onDetails: (item: DownloadLiveStatus) => void;
+};
+
 function DownloadRow({
   item,
   queueName,
+  controls,
 }: {
   item: DownloadLiveStatus;
   queueName: string;
+  controls: RowControls;
 }) {
   const name = downloadName(item);
   const status = statusKey(item);
   const percent = progressPercent(item);
+  const action = downloadActions[status];
+  const ActionIcon =
+    action === 'Pause' ? Pause : action === 'Retry' ? RotateCw : Play;
+  const pending = controls.pending(item);
   const Icon = categoryIcons[item.download.category];
   const error =
     typeof item.download.status === 'object'
@@ -57,7 +83,7 @@ function DownloadRow({
                   : ''
             }
           >
-            {label}
+            {pending && status === 'Active' ? 'Pausing…' : label}
           </span>
           <span className="tabular-nums">
             {formatBytes(item.completed_length)} /{' '}
@@ -101,6 +127,33 @@ function DownloadRow({
           </p>
         )}
       </div>
+      <div className="flex shrink-0 gap-0.5">
+        {status !== 'Completed' && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            disabled={pending || controls.unavailable}
+            aria-label={`${action} ${name}`}
+            title={action}
+            onClick={() => controls.onAction(item)}
+          >
+            <ActionIcon aria-hidden="true" />
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          aria-label={`Download details for ${name}`}
+          title="Download details"
+          onClick={() => controls.onDetails(item)}
+        >
+          <Ellipsis aria-hidden="true" />
+        </Button>
+      </div>
     </article>
   );
 }
@@ -113,9 +166,11 @@ const overscan = 3;
 export function DownloadList({
   items,
   queues,
+  controls,
 }: {
   items: DownloadLiveStatus[];
   queues: Queue[];
+  controls: RowControls;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(300);
@@ -181,6 +236,7 @@ export function DownloadList({
           >
             <DownloadRow
               item={item}
+              controls={controls}
               queueName={
                 queueNames.get(item.download.queue_id) ??
                 `Queue #${item.download.queue_id}`

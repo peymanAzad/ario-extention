@@ -65,6 +65,22 @@ Health, downloads, and queues refresh every second while visible. During outages
 - Last successful server data is retained within the open UI’s Query cache, not persisted after the popup closes. Only dashboard UI preferences persist. Large lists still require the daemon’s complete unpaginated snapshot; virtualization bounds DOM rendering, not network payload or local filtering work.
 - Headless Chrome reports background tabs as visible, so its harness dispatches explicit visibility changes. Render tests independently verify polling pauses when hidden, resumes when visible, and stops on unmount.
 - Proxy fields omitted by the daemon show “not reported”; no proxy-enabled assumption is made. Metadata acquisition is inferred from a torrent/magnet without a known positive total because the current API has no explicit metadata flag.
-- Phases 4–9 remain pending. Adding downloads, row actions/details, queue editing, and browser capture are outside this read-only phase. No new browser permissions were added. The plan documents and design reference are preserved.
+- At the end of Phase 3, Phases 4–9 remained pending. Adding downloads, row actions/details, queue editing, and browser capture were outside that read-only phase. No new browser permissions were added. The plan documents and design reference are preserved.
 
-Begin the next session with [Phase 4 — Download workflows](plans/phase-04-downloads.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+Phase 3 handed off to [Phase 4 — Download workflows](plans/phase-04-downloads.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).
+
+## Phase 4 — Download workflows
+
+Implemented on November 19, 2026 against the unchanged daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. The popup adds an Add downloads dialog for selected links extracted from mixed pasted text, HTTP(S) URLs, magnet links, and local torrent files up to 16 MiB. Users can choose a queue, keep or customize its defaults, and select Start now or Save for later. Each link gets an individual outcome. Already-added entries are locked in the batch and rejected entries require explicit reselection.
+
+Status-based row controls provide Start, Pause, Resume, Retry, and Restart. Download details provides copyable URL and destination folder, queue reassignment, and per-download settings. Record removal keeps files. File deletion requires confirmation and reports removed or missing files and incomplete metadata when reported by the daemon. Clear completed confirms the scope and works for the selected queue or all queues. The dialogs use the reference’s compact form layout and existing light/dark theme tokens.
+
+The background uses named, validated operations. Open views refresh affected queries after writes. Actions and edits compare their expected state with current daemon details before writing. A final race remains because the daemon offers no conditional mutation endpoint. The selected queue and valid override settings survive popup closure. Pasted links and selected torrent files are transient. Closing the popup can leave the rest of a batch unsubmitted.
+
+### Verification
+
+- Type checking, lint, formatting, and whitespace checks passed. All 70 Vitest tests passed.
+- Download workflow tests use daemon-shaped HTTP responses and mock state changes from the TUI. They cover mixed links and magnets, partial and uncertain outcomes, repeated submission, both start modes, inherited and zero values, a 16 MiB multipart file and oversize validation, status transitions, stale edits, clipboard actions, queue reassignment, both deletion modes, and both clear scopes.
+- Chrome and Firefox MV3 extensions were built and packaged. The sandbox denies binding to loopback. The automatic approval service returned HTTP 404 for the request to run the browser smoke checks outside the sandbox. Browser layout and live daemon workflows remain unverified for Phase 4.
+
+Continue with [Phase 5 — Queue management and HTTP parity](plans/phase-05-queues.md), [project context](PROJECT_CONTEXT.md), and the [feature parity map](FEATURE_PARITY.md).

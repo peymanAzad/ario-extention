@@ -1,6 +1,6 @@
 # Ario TUI feature parity
 
-Phases 1–3 deliver the extension shell, saved appearance and connection settings, connection checks, read-only daemon settings, and the live download dashboard. Dashboard navigation, combined filters, local filename/URL search, sorting, progress, health summaries, and list virtualization are implemented. The table maps workflows to the HTTP routes verified at daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Paths are relative to the daemon origin.
+Phases 1–4 deliver the extension shell, saved appearance and connection settings, connection checks, read-only daemon settings, the live download dashboard, and download creation and management. Dashboard navigation, combined filters, local filename/URL search, sorting, progress, health summaries, and list virtualization are implemented. The table maps workflows to the HTTP routes verified at daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Paths are relative to the daemon origin.
 
 | TUI or browser workflow                                                                 | API or extension behavior                                                                                                                                                             | Phase |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
@@ -26,5 +26,5 @@ Phases 1–3 deliver the extension shell, saved appearance and connection settin
 ## Native and deferred workflows
 
 - Native daemon launch and shutdown remain TUI workflows. The extension leaves the daemon running after the UI closes.
-- Opening or revealing local files and folders stays native. The extension will offer paths users can copy.
+- Opening or revealing local files and folders stays native. Download details offers a copyable destination folder path.
 - Daemon configuration writes, remote connections, and mobile browser support are outside the planned extension scope.

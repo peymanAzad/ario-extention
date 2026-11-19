@@ -195,7 +195,18 @@ it('polls all resources once a second only while visible and stops on unmount', 
 
 it('virtualizes ten thousand rows and supports keyboard navigation to the last row', async () => {
   const items = Array.from({ length: 10000 }, (_, i) => liveDownload(i + 1));
-  renderPage(<DownloadList items={items} queues={[mainQueue]} />);
+  renderPage(
+    <DownloadList
+      items={items}
+      queues={[mainQueue]}
+      controls={{
+        unavailable: false,
+        pending: () => false,
+        onAction: vi.fn(),
+        onDetails: vi.fn(),
+      }}
+    />,
+  );
   expect(screen.getAllByRole('listitem').length).toBeLessThan(20);
   const region = screen.getByRole('region', { name: 'Download list' });
   region.focus();
@@ -268,8 +279,10 @@ it('makes navigation, filters, sorting and list scrolling reachable with Tab', a
     screen.getByRole('button', { name: 'All queues' }),
     screen.getByRole('button', { name: 'Main Queue · Active' }),
     screen.getByRole('button', { name: 'Night shift · Paused' }),
+    screen.getByRole('button', { name: 'Add download' }),
     screen.getByRole('searchbox'),
     screen.getByLabelText('Filter download status'),
+    screen.getByRole('button', { name: 'Clear completed' }),
     screen.getByLabelText('Sort downloads'),
     screen.getByRole('button', { name: 'Sort ascending' }),
     screen.getByRole('region', { name: 'Download list' }),

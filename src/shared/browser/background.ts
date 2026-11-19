@@ -1,4 +1,6 @@
 import { browser, type Browser } from 'wxt/browser';
+import { runDownloadOperation } from '@/shared/api/download-operations';
+import { writeDownloadDraft } from '@/shared/storage/download-draft';
 import { requestDaemon } from '@/shared/api/transport';
 import { writeDashboardFilters } from '@/shared/storage/dashboard';
 import { updateSettings } from '@/shared/storage/settings';
@@ -62,6 +64,21 @@ export function createBackgroundHandler() {
       }
     }
 
+    if (message.operation === 'downloadDraft.update') {
+      try {
+        await writeDownloadDraft(message.draft);
+        return { ok: true, data: null };
+      } catch {
+        return {
+          ok: false,
+          error: {
+            kind: 'storage',
+            message: 'Could not remember the download draft.',
+          },
+        };
+      }
+    }
+
     if (message.operation === 'settings.update') {
       try {
         return { ok: true, data: await updateSettings(message.patch) };
@@ -99,11 +116,7 @@ export function createBackgroundHandler() {
     requests.set(requestKey, controller);
     try {
       const options = { signal: controller.signal };
-      let data: BackgroundResults[
-        | 'daemon.health'
-        | 'daemon.settings'
-        | 'daemon.downloads'
-        | 'daemon.queues'];
+      let data: BackgroundResults[keyof BackgroundResults];
       switch (message.operation) {
         case 'daemon.health':
           data = await requestDaemon(
@@ -136,6 +149,9 @@ export function createBackgroundHandler() {
             queueSchema.array(),
             options,
           );
+          break;
+        default:
+          data = await runDownloadOperation(message, controller.signal);
           break;
       }
       return { ok: true, data };

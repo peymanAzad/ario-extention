@@ -3,6 +3,7 @@ import {
   checkDaemon,
   getDaemonSettings,
   getDownloads,
+  getDownload,
   getQueues,
 } from '@/shared/browser/messages';
 
@@ -11,6 +12,8 @@ export const daemonKeys = {
   health: (origin: string) => [...daemonKeys.origin(origin), 'health'] as const,
   downloads: (origin: string) =>
     [...daemonKeys.origin(origin), 'downloads'] as const,
+  download: (origin: string, id: number) =>
+    [...daemonKeys.origin(origin), 'download', id] as const,
   queues: (origin: string) => [...daemonKeys.origin(origin), 'queues'] as const,
   settings: (origin: string) =>
     [...daemonKeys.origin(origin), 'settings'] as const,
@@ -58,6 +61,16 @@ export function useQueues(origin: string, enabled: boolean) {
   return useQuery({
     queryKey: daemonKeys.queues(origin),
     queryFn: ({ signal }) => getQueues(origin, signal),
+    enabled,
+    retry: false,
+    refetchInterval: 1000,
+  });
+}
+
+export function useDownload(origin: string, id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: daemonKeys.download(origin, id),
+    queryFn: ({ signal }) => getDownload(origin, id, signal),
     enabled,
     retry: false,
     refetchInterval: 1000,

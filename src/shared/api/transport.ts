@@ -11,6 +11,7 @@ type RequestOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  body?: FormData | { json: unknown };
 };
 
 export function requestDaemon<T>(
@@ -29,7 +30,7 @@ export async function requestDaemon<T>(
   address: string,
   path: `/${string}`,
   expected: z.ZodType<T> | 'empty',
-  { signal, timeoutMs = 5000, method = 'GET' }: RequestOptions = {},
+  { signal, timeoutMs = 5000, method = 'GET', body }: RequestOptions = {},
 ): Promise<T | void> {
   const origin = parseDaemonOrigin(address);
   if (!origin)
@@ -42,16 +43,19 @@ export async function requestDaemon<T>(
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
   let response: Response;
-  let body: string;
+  const isJson = body !== undefined && 'json' in body;
+  let responseBody: string;
   try {
     response = await fetch(`${origin}${path}`, {
       method,
+      headers: isJson ? { 'Content-Type': 'application/json' } : undefined,
+      body: isJson ? JSON.stringify(body.json) : body,
       signal: requestSignal,
       redirect: 'error',
       credentials: 'omit',
       cache: 'no-store',
     });
-    body = await response.text();
+    responseBody = await response.text();
   } catch {
     if (requestSignal.aborted) {
       if (requestSignal.reason === timeout.reason) {
@@ -71,7 +75,7 @@ export async function requestDaemon<T>(
 
   let json: unknown;
   try {
-    json = JSON.parse(body);
+    json = JSON.parse(responseBody);
   } catch {
     // Empty replies and non-JSON errors are handled according to the route.
   }
@@ -88,7 +92,7 @@ export async function requestDaemon<T>(
 
   // Daemon success responses are bare JSON on read routes and empty on some write routes.
   if (expected === 'empty') {
-    if (body === '') return;
+    if (responseBody === '') return;
   } else {
     const result = expected.safeParse(json);
     if (result.success) return result.data;

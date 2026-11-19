@@ -313,3 +313,73 @@
     margin-top: 0;
   }
 }
+
+.workflow-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #00000044;
+}
+.workflow-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 11;
+  width: min(420px, calc(100% - 28px));
+  max-height: calc(100% - 28px);
+  transform: translate(-50%, -50%);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+  padding: 22px;
+  box-shadow: 0 10px 50px #00000024;
+}
+.workflow-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  font-size: 11px;
+}
+.workflow-field :is(input, textarea, select) {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  padding: 7px 9px;
+  font-size: 12px;
+}
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+@media (max-width: 400px) {
+  .workflow-dialog {
+    padding: 15px;
+  }
+}
+.workflow-notice {
+  position: fixed;
+  bottom: 52px;
+  left: 50%;
+  z-index: 5;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  padding: 8px 12px;
+  font-size: 11px;
+  box-shadow: 0 4px 20px #00000018;
+}

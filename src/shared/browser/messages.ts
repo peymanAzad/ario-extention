@@ -5,6 +5,10 @@ import type {
   BackgroundReply,
   BackgroundResults,
 } from '@/shared/types/messages';
+import type {
+  DownloadDraft,
+  ImportOptions,
+} from '@/shared/types/download-workflows';
 import type { DashboardFilters } from '@/shared/types/dashboard';
 import type { SettingsPatch } from '@/shared/types/settings';
 
@@ -37,16 +41,20 @@ async function send<K extends Operation>(
   return reply.data;
 }
 
-type DaemonOperation =
-  'daemon.health' | 'daemon.settings' | 'daemon.downloads' | 'daemon.queues';
+type DaemonRead =
+  | 'daemon.health'
+  | 'daemon.settings'
+  | 'daemon.downloads'
+  | 'daemon.queues'
+  | 'daemon.download';
 
-async function daemonRequest<K extends DaemonOperation>(
+async function daemonRequest<K extends DaemonRead>(
   operation: K,
-  origin: string,
+  payload: Payloads[K],
   signal?: AbortSignal,
 ): Promise<BackgroundResults[K]> {
   if (signal?.aborted) throw new ArioError(cancelled);
-  const requestId = crypto.randomUUID();
+  const { requestId } = payload;
   const cancel = () => {
     void send('daemon.cancel', { requestId }).catch(() => {
       // The background also bounds each fetch with a timeout.
@@ -55,7 +63,7 @@ async function daemonRequest<K extends DaemonOperation>(
 
   signal?.addEventListener('abort', cancel, { once: true });
   try {
-    const result = await send(operation, { requestId, origin });
+    const result = await send(operation, payload);
     if (signal?.aborted) throw new ArioError(cancelled);
     return result;
   } finally {
@@ -64,19 +72,81 @@ async function daemonRequest<K extends DaemonOperation>(
 }
 
 export const checkDaemon = (origin: string, signal?: AbortSignal) =>
-  daemonRequest('daemon.health', origin, signal);
+  daemonRequest(
+    'daemon.health',
+    { origin, requestId: crypto.randomUUID() },
+    signal,
+  );
 
 export const getDaemonSettings = (origin: string, signal?: AbortSignal) =>
-  daemonRequest('daemon.settings', origin, signal);
+  daemonRequest(
+    'daemon.settings',
+    { origin, requestId: crypto.randomUUID() },
+    signal,
+  );
 
 export const saveSettings = (patch: SettingsPatch) =>
   send('settings.update', { patch });
 
 export const getDownloads = (origin: string, signal?: AbortSignal) =>
-  daemonRequest('daemon.downloads', origin, signal);
+  daemonRequest(
+    'daemon.downloads',
+    { origin, requestId: crypto.randomUUID() },
+    signal,
+  );
 
 export const getQueues = (origin: string, signal?: AbortSignal) =>
-  daemonRequest('daemon.queues', origin, signal);
+  daemonRequest(
+    'daemon.queues',
+    { origin, requestId: crypto.randomUUID() },
+    signal,
+  );
 
 export const saveDashboardFilters = (filters: DashboardFilters) =>
   send('dashboard.update', { filters });
+
+export const getDownload = (origin: string, id: number, signal?: AbortSignal) =>
+  daemonRequest(
+    'daemon.download',
+    { origin, id, requestId: crypto.randomUUID() },
+    signal,
+  );
+
+export const saveDownloadDraft = (draft: DownloadDraft) =>
+  send('downloadDraft.update', { draft });
+
+type DownloadWrite = Extract<Operation, `daemon.download.${string}`>;
+
+export function writeDownload<K extends DownloadWrite>(
+  operation: K,
+  payload: Omit<Payloads[K], 'requestId'>,
+) {
+  return send(operation, {
+    ...payload,
+    requestId: crypto.randomUUID(),
+  } as Payloads[K]);
+}
+
+export async function uploadTorrent(
+  origin: string,
+  file: File,
+  options: ImportOptions,
+) {
+  // Chrome runtime messages use JSON serialization. A data URL keeps the
+  // message below the browser limit without expanding each byte into a number.
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      resolve(dataUrl.slice(dataUrl.indexOf(',') + 1));
+    };
+    reader.onerror = () =>
+      reject(new Error('Could not read the torrent file.'));
+    reader.readAsDataURL(file);
+  });
+  return writeDownload('daemon.download.torrent', {
+    origin,
+    file: { name: file.name, base64 },
+    options,
+  });
+}
