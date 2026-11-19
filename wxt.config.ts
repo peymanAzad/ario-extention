@@ -10,8 +10,10 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'Ario',
     description: 'Manage downloads with the local Ario daemon.',
-    permissions: ['storage'],
+    permissions: ['storage', 'contextMenus'],
     host_permissions: [...loopbackHostPermissions],
+    optional_permissions: ['cookies'],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     ...(browser === 'firefox' && {
       browser_specific_settings: {
         gecko: {

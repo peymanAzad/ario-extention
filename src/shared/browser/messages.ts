@@ -97,6 +97,17 @@ export const getBrowserCapabilities = (origin: string, signal?: AbortSignal) =>
 export const saveSettings = (patch: SettingsPatch) =>
   send('settings.update', { patch });
 
+export const getConfirmation = (id: string) => send('confirmation.get', { id });
+
+export const checkConfirmation = (id: string) =>
+  send('confirmation.check', { id });
+
+export const submitConfirmation = (
+  id: string,
+  options: ImportOptions,
+  session: boolean,
+) => send('confirmation.submit', { id, options, session });
+
 export const getDownloads = (origin: string, signal?: AbortSignal) =>
   daemonRequest(
     'daemon.downloads',

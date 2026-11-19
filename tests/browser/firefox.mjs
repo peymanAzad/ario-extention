@@ -6,6 +6,7 @@ import { By, Key, until } from 'selenium-webdriver';
 import firefox from 'selenium-webdriver/firefox.js';
 import app from '../../package.json' with { type: 'json' };
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
+import { smokeMagnet } from './confirmation.mjs';
 import { startTestDaemon } from './daemon.mjs';
 
 const { manifest } = await readBuild('firefox');
@@ -249,6 +250,158 @@ try {
   await driver.get(`${origin}/confirmation.html`);
   await heading('Download with Ario');
   await waitForTheme('light');
+
+  if (daemon.fixture) {
+    await driver.get(`${daemon.origin}/browser-handoff-fixture`);
+    async function openLink(id) {
+      await driver
+        .actions()
+        .contextClick(await driver.findElement(By.id(id)))
+        .perform();
+      await driver.setContext(firefox.Context.CHROME);
+      try {
+        const menuItem = await driver.wait(
+          until.elementLocated(
+            By.css(
+              '#contentAreaContextMenu menuitem[label="Download with Ario"]',
+            ),
+          ),
+          10_000,
+          `Expected the native Ario menu for ${id}`,
+        );
+        await driver.executeScript(
+          'arguments[0].doCommand(); document.getElementById("contentAreaContextMenu").hidePopup();',
+          menuItem,
+        );
+      } finally {
+        await driver.setContext(firefox.Context.CONTENT);
+      }
+      const handle = await driver.wait(
+        async () =>
+          (await driver.getAllWindowHandles()).find(
+            (candidate) =>
+              candidate !== popupHandle && candidate !== optionsHandle,
+          ),
+        10_000,
+        `Expected a confirmation window for ${id}`,
+      );
+      await driver.switchTo().window(handle);
+      await heading('Download with Ario');
+      assert.match(
+        await driver.getCurrentUrl(),
+        /\/confirmation\.html#[\da-f-]{36}$/,
+      );
+      return handle;
+    }
+    async function closeConfirmation(handle) {
+      await (await button('Close')).click();
+      await driver.wait(
+        async () => !(await driver.getAllWindowHandles()).includes(handle),
+        10_000,
+        'Expected the confirmation window to close',
+      );
+      await driver.switchTo().window(popupHandle);
+    }
+
+    const confirmationHandle = await openLink('magnet-link');
+    await waitForText('Fixture torrent');
+    await waitForTheme('light');
+    const cardColor = () =>
+      driver.executeScript(
+        'return getComputedStyle(document.querySelector("section")).backgroundColor',
+      );
+    assert.equal(await cardColor(), lightBackground);
+    await writeFile(
+      'test-results/confirmation-firefox-light.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+    await driver.switchTo().window(optionsHandle);
+    await driver.findElement(By.xpath('//label[span[text()="Dark"]]')).click();
+    await driver.switchTo().window(confirmationHandle);
+    await waitForTheme('dark');
+    assert.equal(await cardColor(), darkBackground);
+    await writeFile(
+      'test-results/confirmation-firefox-dark.png',
+      await driver.takeScreenshot(),
+      'base64',
+    );
+    const startNow = await driver.findElement(
+      By.xpath('//button[normalize-space(.)="Start now"]'),
+    );
+    await driver.wait(
+      until.elementIsEnabled(startNow),
+      10_000,
+      'Expected the magnet confirmation to be ready',
+    );
+    await startNow.click();
+    await driver.wait(
+      until.elementLocated(By.xpath('//*[text()="Added to Ario."]')),
+      10_000,
+      'Expected Ario to commit the magnet',
+    );
+    await closeConfirmation(confirmationHandle);
+
+    const privateHandle = await openLink('private-link');
+    await driver.wait(
+      until.elementLocated(By.xpath('//bdi[text()="credentialed.zip"]')),
+      10_000,
+      'Expected the credentialed link in its confirmation',
+    );
+    const session = await driver.wait(
+      until.elementLocated(
+        By.css(
+          'input[type="checkbox"][aria-describedby="browser-session-help"]',
+        ),
+      ),
+      10_000,
+      'Expected the browser session checkbox',
+    );
+    assert.equal(await session.isSelected(), false);
+    await session.click();
+    await driver.wait(
+      async () => {
+        const reason = await driver
+          .findElement(By.id('browser-session-help'))
+          .getText();
+        assert.doesNotMatch(reason, /denied|could not be identified/);
+        return session.isSelected();
+      },
+      10_000,
+      'Expected Firefox to grant cookie access',
+    );
+    await (await button('Save for later')).click();
+    await driver.wait(
+      async () => {
+        const [alert] = await driver.findElements(By.css('[role="alert"]'));
+        if (alert) assert.fail(await alert.getText());
+        return (
+          (await driver.findElements(By.xpath('//*[text()="Added to Ario."]')))
+            .length > 0
+        );
+      },
+      10_000,
+      'Expected Ario to commit the credentialed link',
+    );
+    await closeConfirmation(privateHandle);
+
+    daemon.verifyHandoffs(
+      {
+        url: smokeMagnet,
+        queue_id: 1,
+        finetune_override: null,
+        start_immediately: true,
+      },
+      {
+        url: `${daemon.origin}/private/credentialed.zip`,
+        method: 'GET',
+        queue_id: 1,
+        finetune_override: null,
+        start_immediately: false,
+        session: { cookie: 'ario_fixture=allowed' },
+      },
+    );
+  }
 
   daemon.verify();
   console.log('Firefox MV3 smoke passed.');

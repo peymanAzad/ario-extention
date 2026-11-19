@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
+import { smokeMagnet } from './confirmation.mjs';
 
 export async function startTestDaemon() {
   if (process.env.ARIO_TEST_ORIGIN) {
@@ -13,6 +14,7 @@ export async function startTestDaemon() {
 
   const requests = new Set();
   const counts = new Map();
+  const handoffs = new Map();
   let offline = false;
   let large = false;
   const health = {
@@ -121,7 +123,45 @@ export async function startTestDaemon() {
       eta_seconds: index % 7 === 0 ? 1 : null,
     };
   }
-  const server = createServer((request, response) => {
+  const json = (response, body) =>
+    response
+      .writeHead(200, { 'Content-Type': 'application/json' })
+      .end(JSON.stringify(body));
+  const server = createServer(async (request, response) => {
+    if (request.url === '/favicon.ico') return response.writeHead(204).end();
+    if (request.url === '/browser-handoff-fixture') {
+      response.writeHead(200, {
+        'Content-Type': 'text/html',
+        'Set-Cookie': [
+          'ario_fixture=allowed; Path=/private; HttpOnly; SameSite=Strict',
+          'ario_other=excluded; Path=/other; HttpOnly; SameSite=Strict',
+        ],
+      });
+      response.end(
+        `<a id="magnet-link" href="${smokeMagnet.replaceAll('&', '&amp;')}">Fixture torrent</a>
+        <a id="private-link" href="/private/credentialed.zip">Credentialed file</a>`,
+      );
+      return;
+    }
+    if (request.url === '/browser-handoffs' && request.method === 'POST') {
+      let body = '';
+      for await (const chunk of request) body += chunk;
+      const { id, request: payload } = JSON.parse(body);
+      if (!handoffs.has(id)) handoffs.set(id, { payload, state: 'staged' });
+      json(response, { id, state: 'staged', download_id: null });
+      return;
+    }
+    const commit = /^\/browser-handoffs\/([\da-f-]+)\/commit$/.exec(
+      request.url,
+    );
+    if (commit && request.method === 'POST') {
+      const id = commit[1];
+      const handoff = handoffs.get(id);
+      if (!handoff) return response.writeHead(404).end();
+      handoff.state = 'committed';
+      json(response, { id, state: 'committed', download_id: 42 });
+      return;
+    }
     requests.add(`${request.method} ${request.url}`);
     counts.set(request.url, (counts.get(request.url) ?? 0) + 1);
     if (offline) {
@@ -153,9 +193,7 @@ export async function startTestDaemon() {
       return;
     }
     // No CORS header. The request must use the extension's loopback host access.
-    response
-      .writeHead(200, { 'Content-Type': 'application/json' })
-      .end(JSON.stringify(body));
+    json(response, body);
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -171,6 +209,12 @@ export async function startTestDaemon() {
     },
     downloadRequests() {
       return counts.get('/downloads') ?? 0;
+    },
+    verifyHandoffs(...payloads) {
+      assert.deepEqual(
+        [...handoffs.values()],
+        payloads.map((payload) => ({ payload, state: 'committed' })),
+      );
     },
     verify() {
       assert.deepEqual(

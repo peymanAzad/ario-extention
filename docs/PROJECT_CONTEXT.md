@@ -5,7 +5,7 @@
 - The extension workspace is `/home/asana/Documents/ChatGPT/ario-extention`.
 - The daemon and terminal UI live in `/home/asana/projects/ario`. Phases 2–5 checked the API against commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f` without changing the daemon checkout.
 - [Implementation plans](plans/README.md) and [visual reference](design/ario-design.html). The reference provides compact navigation, typography, spacing, and theme colors. Product behavior comes from the plans and daemon source.
-- Desktop Chrome and Firefox use Manifest V3. WXT generates a Chrome service worker and Firefox background scripts. The toolbar popup targets 780 × 580 CSS pixels and scrolls within its panes. Settings opens in an extension tab. Confirmation is an unlisted extension page for the future standalone window.
+- Desktop Chrome and Firefox use Manifest V3. WXT generates a Chrome service worker and Firefox background scripts. The toolbar popup targets 780 × 580 CSS pixels and scrolls within its panes. Settings opens in an extension tab. Link confirmation opens in a standalone window backed by an unlisted extension page.
 
 ## Architecture
 
@@ -43,6 +43,12 @@ One background operation saves queue settings and then applies staged order. It 
 Phase 6 adds the [version 1 browser handoff API](BROWSER_HANDOFF_API.md). The extension background reads capabilities through a named request. Settings and the recurring queue schedule display the reported daemon timezone, with the existing local-time behavior available on older daemons. A missing capability route does not affect the existing management calls. One-time schedule inputs still use browser local time and serialize to UTC.
 
 The daemon stores handoff receipts outside the ordinary download list and scheduling tables. Commit persists the download and receipt together, then the normal scheduler starts eligible transfers. An authenticated loopback route streams session-bearing transfers to aria2 and sends context only to the validated final URL. Session headers are stored privately, excluded from management responses, and deleted with the download. The daemon rejects webpage origins and continues to accept originless local clients.
+
+Phase 7 uses the link context menu to open an independent confirmation for each supported HTTP(S) or BitTorrent v1 magnet link. The background binds the opaque confirmation ID to the owning extension window and the daemon origin saved when it opened. It keeps the draft URL and source tab in `storage.session`, which survives background suspension and clears when the browser exits. Closing the window discards an unsubmitted draft. The form uses queue defaults initially and can send custom fine-tuning with either start mode.
+
+An explicit submission creates a recovery record in `storage.local` with the daemon origin, opaque IDs, and protocol phase. On background startup or when the user checks status, the extension reconciles the daemon receipt. A known staged receipt can be committed under its original UUID even if its window has closed. An aborted or missing receipt lets an open confirmation return to editing. Simultaneous requests from the same confirmation share the in-progress operation.
+
+The manifest adds `contextMenus` and declares cookies and HTTP(S) sites as optional permissions. The user enables session sharing separately in each confirmation. The browser prompts for cookies and the selected host as needed. The background verifies the original top-level page and its cookie store and partition before collecting cookies for a same-origin link. Other contexts offer public submission or returning to the browser. Cookies pass directly to the daemon during staging. Context-menu clicks supply no observed request headers or redirect chain, so the extension sends the clicked URL and omits referrer and user-agent headers.
 
 Daemon contracts live in `common/src/`, `server/src/routes/`, `server/src/error.rs`, and `tui/src/api.rs`. The server returns bare JSON for active read routes and an empty body for some write routes. Structured application errors carry `{"result":"error","message":"…"}`. Rust enum variants use their serialized casing, and payload variants like download status `Error(String)` serialize as objects.
 

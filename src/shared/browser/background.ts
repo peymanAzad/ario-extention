@@ -1,6 +1,7 @@
 import { browser, type Browser } from 'wxt/browser';
 import { runDownloadOperation } from '@/shared/api/download-operations';
 import { runQueueOperation } from '@/shared/api/queue-operations';
+import { readBrowserCapabilities } from '@/shared/api/browser-handoffs';
 import { writeDownloadDraft } from '@/shared/storage/download-draft';
 import { requestDaemon } from '@/shared/api/transport';
 import { writeDashboardFilters } from '@/shared/storage/dashboard';
@@ -11,13 +12,13 @@ import {
   downloadLiveStatusSchema,
   queueSchema,
 } from '@/shared/types/daemon';
-import { browserCapabilitiesSchema } from '@/shared/types/browser-capabilities';
 import { ArioError } from '@/shared/types/connection';
 import {
   backgroundMessageSchema,
   type BackgroundReply,
   type BackgroundResults,
 } from '@/shared/types/messages';
+import { createConfirmations } from './confirmations';
 
 const uiPages = ['/popup.html', '/options.html', '/confirmation.html'] as const;
 type Reply = BackgroundReply<BackgroundResults[keyof BackgroundResults]>;
@@ -34,7 +35,7 @@ export function isTrustedUi(sender: Browser.runtime.MessageSender): boolean {
   return uiPages.some((page) => browser.runtime.getURL(page) === documentUrl);
 }
 
-export function createBackgroundHandler() {
+export function createBackgroundHandler(confirmations = createConfirmations()) {
   const requests = new Map<string, AbortController>();
 
   return function onMessage(
@@ -52,6 +53,40 @@ export function createBackgroundHandler() {
     message: ReturnType<typeof backgroundMessageSchema.parse>,
     sender: Browser.runtime.MessageSender,
   ): Promise<Reply> {
+    if (
+      message.operation === 'confirmation.get' ||
+      message.operation === 'confirmation.check' ||
+      message.operation === 'confirmation.submit'
+    ) {
+      try {
+        const { id } = message;
+        const data =
+          message.operation === 'confirmation.get'
+            ? await confirmations.get(id, sender)
+            : message.operation === 'confirmation.check'
+              ? await confirmations.check(id, sender)
+              : await confirmations.submit(
+                  id,
+                  message.options,
+                  message.session,
+                  sender,
+                );
+        return { ok: true, data };
+      } catch (error) {
+        return {
+          ok: false,
+          error:
+            error instanceof ArioError
+              ? error.detail
+              : {
+                  kind: 'extension',
+                  message:
+                    'The confirmation is temporarily unavailable. Try checking its status again.',
+                },
+        };
+      }
+    }
+
     if (message.operation === 'dashboard.update') {
       try {
         return { ok: true, data: await writeDashboardFilters(message.filters) };
@@ -137,22 +172,10 @@ export function createBackgroundHandler() {
           );
           break;
         case 'daemon.browserCapabilities':
-          try {
-            data = await requestDaemon(
-              message.origin,
-              '/browser-capabilities',
-              browserCapabilitiesSchema,
-              options,
-            );
-          } catch (error) {
-            if (!(
-              error instanceof ArioError &&
-              error.detail.kind === 'http' &&
-              error.detail.status === 404
-            ))
-              throw error;
-            data = null;
-          }
+          data = await readBrowserCapabilities(
+            message.origin,
+            controller.signal,
+          );
           break;
         case 'daemon.downloads':
           data = await requestDaemon(

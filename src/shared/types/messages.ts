@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import type { BrowserCapabilities } from './browser-capabilities';
+import {
+  confirmationIdSchema,
+  type ConfirmationDraft,
+  type ConfirmationOutcome,
+} from './confirmation';
 import { dashboardFiltersSchema, type DashboardFilters } from './dashboard';
 import { fineTuneSchema } from './daemon';
 import type {
@@ -35,6 +40,20 @@ const daemonRequest = {
 const downloadRequest = { ...daemonRequest, id: downloadIdSchema };
 
 export const backgroundMessageSchema = z.discriminatedUnion('operation', [
+  z.strictObject({
+    operation: z.literal('confirmation.get'),
+    id: confirmationIdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('confirmation.check'),
+    id: confirmationIdSchema,
+  }),
+  z.strictObject({
+    operation: z.literal('confirmation.submit'),
+    id: confirmationIdSchema,
+    options: importOptionsSchema,
+    session: z.boolean(),
+  }),
   z.strictObject({
     operation: z.literal('dashboard.update'),
     filters: dashboardFiltersSchema,
@@ -153,6 +172,9 @@ export const backgroundMessageSchema = z.discriminatedUnion('operation', [
 
 export type BackgroundMessage = z.input<typeof backgroundMessageSchema>;
 export type BackgroundResults = {
+  'confirmation.get': ConfirmationDraft | null;
+  'confirmation.check': ConfirmationOutcome;
+  'confirmation.submit': ConfirmationOutcome;
   'daemon.health': DaemonHealth;
   'daemon.settings': DaemonSettings;
   'daemon.browserCapabilities': BrowserCapabilities | null;

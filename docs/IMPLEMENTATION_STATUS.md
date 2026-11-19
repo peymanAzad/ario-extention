@@ -114,4 +114,19 @@ The daemon accepts HTTP(S) GET and public BitTorrent v1 magnet handoffs. Session
 - Extension type checking, lint, format, and whitespace checks passed. All 82 Vitest tests passed, including older-daemon compatibility and timezone display.
 - Chrome and Firefox MV3 bundles built and packaged. Smoke checks passed in Chrome 157.0.8103.78 and Firefox 160.0 against both the HTTP fixture and the temporary daemon. The fixture checks verified timezone display through the production background script.
 
-Continue with [Phase 7 — Context menu and confirmation](plans/phase-07-context-menu.md) and the [browser handoff API contract](BROWSER_HANDOFF_API.md). Context-menu registration, session collection, confirmation, and browser download interception are pending.
+Phase 6 handed off to [Phase 7 — Context menu and confirmation](plans/phase-07-context-menu.md) and the [browser handoff API contract](BROWSER_HANDOFF_API.md).
+
+## Phase 7 — Context menu and confirmation
+
+Implemented on November 19, 2026 against daemon commit `640cc1c`. The **Download with Ario** link menu always opens a standalone confirmation for HTTP(S) links and public BitTorrent v1 magnets. The window follows the Download capture reference, shows the selected link, and offers a queue, inherited or custom fine-tuning, Start now, and Save for later. It shows upgrade guidance when the daemon lacks handoff support.
+
+Closing an unsubmitted confirmation discards the draft. Window URLs carry opaque IDs. The background stages and commits explicit submissions and reconciles receipts on restart. Active drafts survive background suspension in browser session storage. The durable recovery record contains the daemon origin, identifiers, and handoff phase.
+
+Session sharing starts off in every window. It requests cookie and site permission when enabled and uses cookies only for direct, same-origin HTTP(S) links from a verifiable top-level tab. Unavailable browser context and denied permission leave public submission and returning to the browser available. The extension sends the clicked URL and applicable cookies without attempting to infer a referrer or redirect destination.
+
+### Verification
+
+- Type checking, lint, formatting, and whitespace checks passed. All 94 Vitest tests passed, covering public links, magnets, optional and revoked permissions, both browsers’ partition handling, simultaneous windows, cancellation, duplicate submission, restart recovery, lost responses, and older or unavailable daemons.
+- Chrome and Firefox MV3 bundles built and packaged. Smoke checks passed in Chrome 157.0.8103.78 and Firefox 160.0 against a loopback fixture. Both verified Light and Dark, opt-in cookie access, and staged submission with only the cookie that matched the file path. Firefox used its native context menu for a magnet and an authenticated HTTP link. The Chrome harness verified menu registration and opened test drafts through the extension’s session storage. It also checked the confirmation at 320 CSS pixels.
+
+Continue with [Phase 8 — Browser interception](plans/phase-08-interception.md), [project context](PROJECT_CONTEXT.md), and the [browser handoff API contract](BROWSER_HANDOFF_API.md).

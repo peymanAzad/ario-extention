@@ -12,7 +12,15 @@ export async function readBuild(browser) {
   );
 
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.permissions, ['storage']);
+  assert.deepEqual(manifest.permissions.toSorted(), [
+    'contextMenus',
+    'storage',
+  ]);
+  assert.deepEqual(manifest.optional_permissions, ['cookies']);
+  assert.deepEqual(manifest.optional_host_permissions.toSorted(), [
+    'http://*/*',
+    'https://*/*',
+  ]);
   assert.deepEqual(
     manifest.host_permissions.toSorted(),
     ['http://127.0.0.1/*', 'http://[::1]/*', 'http://localhost/*'].toSorted(),
