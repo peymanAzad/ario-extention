@@ -272,15 +272,15 @@ it('makes navigation, filters, sorting and list scrolling reachable with Tab', a
   await screen.findByText('Movie.mp4');
   const controls = [
     screen.getByRole('button', { name: 'Open settings' }),
-    screen.getByRole('button', { name: 'All downloads' }),
-    ...['Video', 'Music', 'Documents', 'Archives', 'Programs', 'Other'].map(
-      (name) => screen.getByRole('button', { name }),
-    ),
     screen.getByRole('button', { name: 'Create queue' }),
     screen.getByRole('button', { name: 'All queues' }),
     screen.getByRole('button', { name: 'Main Queue · Active' }),
     screen.getByRole('button', { name: 'Night shift · Paused' }),
     screen.getByRole('button', { name: 'Manage queues' }),
+    screen.getByRole('button', { name: 'All downloads' }),
+    ...['Video', 'Music', 'Documents', 'Archives', 'Programs', 'Other'].map(
+      (name) => screen.getByRole('button', { name }),
+    ),
     screen.getByRole('button', { name: 'Add download' }),
     screen.getByRole('searchbox'),
     screen.getByLabelText('Filter download status'),

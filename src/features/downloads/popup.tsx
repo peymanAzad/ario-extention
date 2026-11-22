@@ -312,38 +312,6 @@ function Dashboard({
       <div className="dashboard-workspace">
         <aside aria-label="Library" className="dashboard-sidebar">
           <fieldset disabled={!filtersReady} className="min-w-0">
-            <legend className="dashboard-section-label">Library</legend>
-            <button
-              type="button"
-              aria-pressed={filters.category === null}
-              className={navClass(filters.category === null)}
-              onClick={() => update({ category: null })}
-            >
-              <Layers size={14} aria-hidden="true" />
-              <span className="min-w-0 flex-1">All downloads</span>
-            </button>
-            {categories.map((category) => {
-              const Icon = categoryIcons[category];
-              return (
-                <button
-                  type="button"
-                  key={category}
-                  aria-pressed={filters.category === category}
-                  className={navClass(filters.category === category)}
-                  onClick={() => update({ category })}
-                >
-                  <Icon size={14} aria-hidden="true" />
-                  <span className="min-w-0 flex-1">
-                    {categoryLabels[category]}
-                  </span>
-                  <span className="text-[10px]" aria-hidden="true">
-                    {downloads.data ? categoryCounts.get(category) : '—'}
-                  </span>
-                </button>
-              );
-            })}
-          </fieldset>
-          <fieldset disabled={!filtersReady} className="mt-6 min-w-0">
             <legend className="dashboard-section-label w-full">
               <span className="flex items-center justify-between gap-1">
                 Queues
@@ -413,6 +381,38 @@ function Dashboard({
               <SlidersHorizontal size={14} aria-hidden="true" />
               <span>Manage queues</span>
             </button>
+          </fieldset>
+          <fieldset disabled={!filtersReady} className="mt-6 min-w-0">
+            <legend className="dashboard-section-label">Library</legend>
+            <button
+              type="button"
+              aria-pressed={filters.category === null}
+              className={navClass(filters.category === null)}
+              onClick={() => update({ category: null })}
+            >
+              <Layers size={14} aria-hidden="true" />
+              <span className="min-w-0 flex-1">All downloads</span>
+            </button>
+            {categories.map((category) => {
+              const Icon = categoryIcons[category];
+              return (
+                <button
+                  type="button"
+                  key={category}
+                  aria-pressed={filters.category === category}
+                  className={navClass(filters.category === category)}
+                  onClick={() => update({ category })}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    {categoryLabels[category]}
+                  </span>
+                  <span className="text-[10px]" aria-hidden="true">
+                    {downloads.data ? categoryCounts.get(category) : '—'}
+                  </span>
+                </button>
+              );
+            })}
           </fieldset>
         </aside>
         <main className="dashboard-main">
