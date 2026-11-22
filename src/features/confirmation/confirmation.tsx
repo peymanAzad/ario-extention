@@ -63,7 +63,7 @@ export function Confirmation({
     <main className="grid min-h-dvh place-items-center bg-muted p-3 sm:p-6">
       <section
         aria-labelledby="confirmation-title"
-        className="w-full min-w-0 max-w-[450px] rounded-xl border border-border bg-background p-5 shadow-sm sm:p-6"
+        className="w-full min-w-0 max-w-[450px] rounded-xl border border-border bg-background p-5 shadow-sm shadow-shadow/15 sm:p-6"
       >
         <div className="mb-6 flex items-center justify-between gap-3">
           <Brand />

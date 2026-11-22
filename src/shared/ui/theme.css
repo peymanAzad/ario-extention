@@ -13,21 +13,23 @@
 
 :root {
   color-scheme: light dark;
-  --background: light-dark(#ffffff, #171c1b);
-  --foreground: light-dark(#202c28, #edf3f0);
-  --sidebar: light-dark(#f6f8f7, #121615);
-  --card: light-dark(#ffffff, #202725);
+  /* Catppuccin Latte and Mocha, respectively. */
+  --background: light-dark(#eff1f5, #1e1e2e);
+  --foreground: light-dark(#4c4f69, #cdd6f4);
+  --sidebar: light-dark(#e6e9ef, #181825);
+  --card: light-dark(#e6e9ef, #313244);
   --card-foreground: var(--foreground);
   --muted: var(--sidebar);
-  --muted-foreground: light-dark(#66756e, #99aaa2);
-  --border: light-dark(#e5eae7, #2b3530);
-  --accent: light-dark(#edf2ef, #26312b);
+  --muted-foreground: light-dark(#5c5f77, #a6adc8);
+  --border: light-dark(#bcc0cc, #45475a);
+  --accent: light-dark(#dce0e8, #313244);
   --accent-foreground: var(--foreground);
-  --mint-muted: light-dark(#e1f3eb, #263d32);
-  --primary: light-dark(#237858, #96dfba);
-  --primary-foreground: light-dark(#ffffff, #142b20);
-  --destructive: light-dark(#b74545, #e89d97);
+  --primary: light-dark(#8839ef, #cba6f7);
+  --primary-foreground: var(--background);
+  --primary-muted: light-dark(#ebeaf5, #313244);
+  --destructive: light-dark(#d20f39, #f38ba8);
   --ring: var(--primary);
+  --shadow-color: light-dark(#4c4f69, #11111b);
   --radius: 0.75rem;
 }
 
@@ -51,11 +53,12 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-mint-muted: var(--mint-muted);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-muted: var(--primary-muted);
   --color-destructive: var(--destructive);
   --color-ring: var(--ring);
+  --color-shadow: var(--shadow-color);
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 5px);
   --radius-lg: var(--radius);
@@ -322,7 +325,7 @@
   position: fixed;
   inset: 0;
   z-index: 10;
-  background: #00000044;
+  background: color-mix(in srgb, var(--shadow-color) 40%, transparent);
 }
 .workflow-dialog {
   position: fixed;
@@ -340,7 +343,8 @@
   border-radius: var(--radius);
   background: var(--background);
   padding: 22px;
-  box-shadow: 0 10px 50px #00000024;
+  box-shadow: 0 10px 50px
+    color-mix(in srgb, var(--shadow-color) 15%, transparent);
 }
 .workflow-field {
   display: grid;
@@ -385,7 +389,8 @@
   background: var(--card);
   padding: 8px 12px;
   font-size: 11px;
-  box-shadow: 0 4px 20px #00000018;
+  box-shadow: 0 4px 20px
+    color-mix(in srgb, var(--shadow-color) 10%, transparent);
 }
 
 .queue-header {
@@ -514,8 +519,8 @@
   font-size: 11px;
 }
 .queue-day[aria-pressed='true'] {
-  border-color: var(--mint-muted);
-  background: var(--mint-muted);
+  border-color: var(--primary-muted);
+  background: var(--primary-muted);
   color: var(--primary);
   font-weight: 600;
 }

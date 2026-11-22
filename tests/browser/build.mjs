@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-export const darkBackground = 'rgb(23, 28, 27)';
-export const lightBackground = 'rgb(255, 255, 255)';
+export const darkBackground = 'rgb(30, 30, 46)';
+export const lightBackground = 'rgb(239, 241, 245)';
 
 export async function readBuild(browser) {
   const directory = resolve('.output', `${browser}-mv3`);
