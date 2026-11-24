@@ -20,7 +20,7 @@ import type { CaptureNotice } from '@/shared/types/capture';
 import { ArioError } from '@/shared/types/connection';
 import type {
   ConfirmationDraft,
-  ConfirmationOutcome,
+  HandoffOutcome as ConfirmationOutcome,
 } from '@/shared/types/confirmation';
 import { queueSchema } from '@/shared/types/daemon';
 import type { ImportOptions } from '@/shared/types/download-workflows';

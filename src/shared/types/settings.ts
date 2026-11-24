@@ -43,6 +43,7 @@ export const extensionSettingsSchema = z.object({
   version: z.literal(1),
   connection: connectionSettingsSchema,
   appearance: appearanceSchema,
+  detectMedia: z.boolean().default(true),
   capture: capturePreferencesSchema.default(() =>
     capturePreferencesSchema.parse({}),
   ),
@@ -61,6 +62,7 @@ export const settingsPatchSchema = z
   .strictObject({
     appearance: appearanceSchema,
     connection: connectionSettingsSchema,
+    detectMedia: z.boolean(),
   })
   .partial();
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;

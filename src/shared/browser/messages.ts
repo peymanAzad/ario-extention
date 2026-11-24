@@ -100,6 +100,9 @@ export const getBrowserCapabilities = (origin: string, signal?: AbortSignal) =>
 export const saveSettings = (patch: SettingsPatch) =>
   send('settings.update', { patch });
 
+export const getDetectedMedia = () => send('media.list', {});
+export const openDetectedMedia = (id: string) => send('media.open', { id });
+
 export const getConfirmation = (id: string) => send('confirmation.get', { id });
 
 export const checkConfirmation = (id: string) =>

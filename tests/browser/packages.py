@@ -54,7 +54,14 @@ def check_manifest(files, browser):
     }
     assert manifest["incognito"] == "not_allowed"
     assert manifest["content_security_policy"] == {"extension_pages": CSP}
-    assert not {"content_scripts", "externally_connectable", "web_accessible_resources", "sandbox"} & manifest.keys()
+    assert not {"externally_connectable", "web_accessible_resources", "sandbox"} & manifest.keys()
+    assert manifest["content_scripts"] == [{
+        "matches": ["http://*/*", "https://*/*"],
+        "all_frames": True,
+        "run_at": "document_start",
+        "js": ["content-scripts/media.js"],
+    }]
+    assert "content-scripts/media.js" in files
     assert manifest["action"]["default_popup"] == "popup.html"
     assert manifest["action"]["default_icon"] == {size: ICONS[size] for size in ("16", "32")}
     assert manifest["options_ui"]["page"] == "options.html"
@@ -90,7 +97,7 @@ def verify_package(browser):
     }, f"{archive} differs from the unpacked build"
     check_manifest(files, browser)
     notices = {"LICENSE-background.txt", "LICENSE-ui.txt"}
-    root_files = PAGES | notices | {"manifest.json", "background.js"}
+    root_files = PAGES | notices | {"manifest.json", "background.js", "LICENSE-media.txt", "content-scripts/media.js"}
     assert notices <= files.keys()
     assert b"SIL OPEN FONT LICENSE" in files["LICENSE-ui.txt"]
     for name, data in files.items():

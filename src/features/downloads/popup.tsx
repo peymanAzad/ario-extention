@@ -24,6 +24,7 @@ import { QueueEditor } from '@/features/queues/queue-editor';
 import { QueueManager } from '@/features/queues/queue-manager';
 import { useExtensionSettings } from '@/features/settings/settings-context';
 import { openOptions } from '@/shared/browser/runtime';
+import { MediaView } from '@/features/media/media-view';
 import {
   categories,
   statuses,
@@ -59,12 +60,21 @@ type QueueView =
 
 export function Popup() {
   const { settings, ready, loadFailed } = useExtensionSettings();
+  const [showMedia, setShowMedia] = useState(false);
+  if (showMedia)
+    return (
+      <MediaView
+        enabled={ready && settings.detectMedia}
+        onBack={() => setShowMedia(false)}
+      />
+    );
   return (
     <Dashboard
       key={settings.connection.origin}
       origin={settings.connection.origin}
       ready={ready}
       loadFailed={loadFailed}
+      onMedia={() => setShowMedia(true)}
     />
   );
 }
@@ -73,10 +83,12 @@ function Dashboard({
   origin,
   ready,
   loadFailed,
+  onMedia,
 }: {
   origin: string;
   ready: boolean;
   loadFailed: boolean;
+  onMedia: () => void;
 }) {
   const queryClient = useQueryClient();
   const visible = usePageVisible();
@@ -427,25 +439,30 @@ function Dashboard({
                 {subtitle}
               </p>
             </div>
-            <Button
-              id="add-download"
-              type="button"
-              disabled={!ready}
-              onClick={() => {
-                setNotice(undefined);
-                setWorkflow({
-                  name: 'add',
-                  initialQueueId:
-                    selectedQueue?.id ??
-                    sortedQueues.find((queue) => queue.id === 1)?.id ??
-                    sortedQueues[0]?.id ??
-                    null,
-                });
-              }}
-            >
-              <Plus aria-hidden="true" />
-              Add download
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={onMedia}>
+                Media
+              </Button>
+              <Button
+                id="add-download"
+                type="button"
+                disabled={!ready}
+                onClick={() => {
+                  setNotice(undefined);
+                  setWorkflow({
+                    name: 'add',
+                    initialQueueId:
+                      selectedQueue?.id ??
+                      sortedQueues.find((queue) => queue.id === 1)?.id ??
+                      sortedQueues[0]?.id ??
+                      null,
+                  });
+                }}
+              >
+                <Plus aria-hidden="true" />
+                Add download
+              </Button>
+            </div>
           </div>
           {(loadFailed || settingsError || dashboard.storageError) && (
             <p role="alert" className="mb-2 text-xs text-destructive">

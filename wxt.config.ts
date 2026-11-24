@@ -56,8 +56,13 @@ export default defineConfig({
   hooks: {
     'vite:build:extendConfig': (entrypoints, config) => {
       const background = entrypoints.some(({ type }) => type === 'background');
+      const content = entrypoints.some(({ type }) => type === 'content-script');
       (config.build ??= {}).license = {
-        fileName: background ? 'LICENSE-background.txt' : 'LICENSE-ui.txt',
+        fileName: background
+          ? 'LICENSE-background.txt'
+          : content
+            ? 'LICENSE-media.txt'
+            : 'LICENSE-ui.txt',
       };
     },
   },

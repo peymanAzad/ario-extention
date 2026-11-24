@@ -281,6 +281,7 @@ it('makes navigation, filters, sorting and list scrolling reachable with Tab', a
     ...['Video', 'Music', 'Documents', 'Archives', 'Programs', 'Other'].map(
       (name) => screen.getByRole('button', { name }),
     ),
+    screen.getByRole('button', { name: 'Media' }),
     screen.getByRole('button', { name: 'Add download' }),
     screen.getByRole('searchbox'),
     screen.getByLabelText('Filter download status'),

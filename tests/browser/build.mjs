@@ -29,6 +29,14 @@ export async function readBuild(browser) {
   ]);
   assert.equal(manifest.action.default_popup, 'popup.html');
   assert.equal(manifest.options_ui.page, 'options.html');
+  assert.deepEqual(manifest.content_scripts, [
+    {
+      matches: ['http://*/*', 'https://*/*'],
+      all_frames: true,
+      run_at: 'document_start',
+      js: ['content-scripts/media.js'],
+    },
+  ]);
 
   return { directory, manifest };
 }

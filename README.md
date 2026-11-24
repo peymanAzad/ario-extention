@@ -8,6 +8,7 @@ Manage downloads and queues in a local Ario daemon from desktop Chrome or Firefo
 2. Load the browser package as described below. Open the Ario toolbar popup, select **Open settings**, and test the daemon connection. If you use a different address, enter an HTTP address on `127.0.0.1`, `localhost`, or `[::1]` and select **Save address**.
 3. Use **Add download** to paste HTTP(S) or magnet URLs or pick a local `.torrent` file. To send a supported link directly from a page, right-click it and select **Download with Ario**.
 4. Ario captures eligible browser downloads by default and asks where to send them. The browser requests the access needed for capture at installation. To keep downloads in the browser, turn off **Capture browser downloads** in Settings. See [capture limitations and permissions](docs/release/STORE.md).
+5. Play a direct video or audio file, then open **Media** in the toolbar popup or choose **Download with Ario** beside the player. Media detection is on by default. Use **Settings → Media → Detect media** to turn it off. Ario can save a direct file when its URL works on its own.
 
 Management was verified with the Ario 0.2.4 API at commit `da9ef00`. Browser link handoff and interception require the daemon's version 1 browser handoff API. Use a daemon built from `640cc1c` or a later compatible revision. Both revisions report Ario 0.2.4, so check for browser handoff support in extension Settings. Ario keeps downloading when you close the extension.
 

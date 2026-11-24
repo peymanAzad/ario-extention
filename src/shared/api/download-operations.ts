@@ -10,6 +10,7 @@ import type {
   backgroundMessageSchema,
   BackgroundResults,
 } from '@/shared/types/messages';
+import type { ImportOptions } from '@/shared/types/download-workflows';
 
 type DownloadOperation = Extract<
   z.output<typeof backgroundMessageSchema>,
@@ -23,6 +24,20 @@ function changed(message: string): never {
   throw new ArioError({ kind: 'http', status: 409, message });
 }
 
+export async function addUrlDownload(
+  origin: string,
+  url: string,
+  options: ImportOptions,
+  signal?: AbortSignal,
+) {
+  const [created] = await requestDaemon(origin, '/downloads', singleDownload, {
+    signal,
+    method: 'POST',
+    body: { json: { ...options, inputs: [{ Url: url }] } },
+  });
+  return created;
+}
+
 export async function runDownloadOperation(
   message: DownloadOperation,
   signal: AbortSignal,
@@ -30,17 +45,7 @@ export async function runDownloadOperation(
   const { origin } = message;
   const options = { signal };
   if (message.operation === 'daemon.download.add') {
-    const [created] = await requestDaemon(
-      origin,
-      '/downloads',
-      singleDownload,
-      {
-        ...options,
-        method: 'POST',
-        body: { json: { ...message.options, inputs: [{ Url: message.url }] } },
-      },
-    );
-    return created;
+    return addUrlDownload(origin, message.url, message.options, signal);
   }
   if (message.operation === 'daemon.download.torrent') {
     const decoded = atob(message.file.base64);

@@ -14,6 +14,8 @@ Ario requires a separately installed Ario daemon and aria2 on the same desktop c
 
 With capture enabled, Ario observes recent HTTP(S) requests to identify eligible browser downloads and passes their URLs and file details to your local daemon. You can separately choose to share applicable cookies and referrer to complete a download from a site where you are signed in. The extension has no analytics or developer-operated data collection service.
 
+The Media view lists direct audio and video detected on the current tab. Supported players also show a download button. Media detection is on by default and has a separate setting. Ario sends a direct file URL to the daemon after you confirm.
+
 ## Browser permissions
 
 | Permission          | Use                                                                                                                            |
@@ -24,7 +26,7 @@ With capture enabled, Ario observes recent HTTP(S) requests to identify eligible
 | Loopback HTTP hosts | Reach the separately installed Ario daemon at the configured local port.                                                       |
 | `downloads`         | Find, pause, cancel, and resume browser downloads during capture and recovery.                                                 |
 | `webRequest`        | Observe HTTP(S) requests and redirects to match an eligible download and safely reproduce its GET request.                     |
-| HTTP(S) sites       | Observe download requests across sites while capture is enabled.                                                               |
+| HTTP(S) sites       | Observe eligible download requests and detect direct media on the current page when the corresponding features are enabled.    |
 | Optional `cookies`  | Retrieve cookies that apply to an eligible same-origin context-menu link after you enable session sharing in its confirmation. |
 
 In Firefox, the manifest discloses browsing activity, website activity, and website content because user-selected links, supported download details, and explicitly shared session context go to the local daemon. Capture is on by default, and session sharing requires opt-in. Chrome's dashboard disclosures should cover website content, web activity, and authentication information such as cookies, including these local uses. [Ario privacy notice](PRIVACY.md), [Mozilla data consent reference](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/), [Chrome privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy)

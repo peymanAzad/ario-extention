@@ -9,7 +9,7 @@ import firefox from 'selenium-webdriver/firefox.js';
 import app from '../../package.json' with { type: 'json' };
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
 import { smokeMagnet } from './confirmation.mjs';
-import { startTestDaemon } from './daemon.mjs';
+import { embeddedMediaPath, startTestDaemon } from './daemon.mjs';
 import {
   setFormValue,
   verifyTransfer,
@@ -723,6 +723,77 @@ try {
     await driver.switchTo().window(paused);
     await waitForText('The download is continuing in your browser.');
     await closeConfirmation(paused);
+  }
+
+  if (daemon.fixture) {
+    await driver.switchTo().newWindow('tab');
+    const mediaSource = await driver.getWindowHandle();
+    await driver.get(`${daemon.origin}/media-fixture`);
+    async function mediaButton() {
+      const wrapper = await driver.wait(
+        until.elementLocated(By.css('[data-ario-media]')),
+        10_000,
+      );
+      return (await wrapper.getShadowRoot()).findElement(By.css('button'));
+    }
+    assert.equal(await (await mediaButton()).getText(), 'Download with Ario');
+    await driver.switchTo().frame(await driver.findElement(By.css('iframe')));
+    const inFrame = await mediaButton();
+    const previous = await driver.getAllWindowHandles();
+    await inFrame.click();
+    const confirmation = await driver.wait(
+      async () =>
+        (await driver.getAllWindowHandles()).find(
+          (handle) => !previous.includes(handle),
+        ),
+      10_000,
+    );
+    await driver.switchTo().window(confirmation);
+    const save = await button('Save for later');
+    await driver.wait(until.elementIsEnabled(save), 10_000);
+    await save.click();
+    await waitForText('Added to Ario.');
+    await driver.close();
+    assert.deepEqual(
+      daemon.mediaAdds.map(({ inputs }) => inputs[0].Url),
+      [`${daemon.origin}${embeddedMediaPath}`],
+    );
+
+    await driver.switchTo().window(popupHandle);
+    await driver.get(`${origin}/popup.html`);
+    await heading('Downloads');
+    await driver.executeAsyncScript(
+      `
+      const [url, done] = arguments;
+      browser.tabs.query({}).then((tabs) => browser.tabs.update(tabs.find((tab) => tab.url === url).id, { active: true })).then(() => {
+        [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Media').click();
+        done();
+      });
+    `,
+      `${daemon.origin}/media-fixture`,
+    );
+    await waitForText('clip.wav');
+    await waitForText('media-redirect');
+
+    await driver.switchTo().window(optionsHandle);
+    const detection = await driver.findElement(
+      By.css('[aria-describedby="media-settings-description"]'),
+    );
+    assert.equal(await detection.isSelected(), true);
+    await detection.click();
+    await driver.wait(async () => !(await detection.isSelected()), 10_000);
+    await driver.switchTo().window(mediaSource);
+    await driver.wait(
+      async () =>
+        !(await driver.findElements(By.css('[data-ario-media]'))).length,
+      10_000,
+    );
+    await driver.switchTo().frame(await driver.findElement(By.css('iframe')));
+    await driver.wait(
+      async () =>
+        !(await driver.findElements(By.css('[data-ario-media]'))).length,
+      10_000,
+    );
   }
 
   daemon.verify();

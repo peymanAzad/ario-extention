@@ -8,7 +8,8 @@ import {
   type SettingsPatch,
 } from '@/shared/types/settings';
 
-const settingsKey = 'settings';
+import { settingsKey } from './settings-key';
+
 const legacyAppearanceKey = 'appearance';
 
 export async function readSettings(): Promise<ExtensionSettings> {

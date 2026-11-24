@@ -7,6 +7,27 @@ import { createServer } from 'node:http';
 import { smokeMagnet } from './confirmation.mjs';
 import { startLiveDaemon } from './live-daemon.mjs';
 
+export const embeddedMediaPath = '/media-redirect?signature=x%2Fz%2B';
+
+function wavFixture() {
+  const bytes = Buffer.alloc(44 + 16000);
+  bytes.write('RIFF', 0);
+  bytes.writeUInt32LE(bytes.length - 8, 4);
+  bytes.write('WAVEfmt ', 8);
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(1, 22);
+  bytes.writeUInt32LE(8000, 24);
+  bytes.writeUInt32LE(16000, 28);
+  bytes.writeUInt16LE(2, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write('data', 36);
+  bytes.writeUInt32LE(bytes.length - 44, 40);
+  return bytes;
+}
+
+const wav = wavFixture();
+
 export async function startTestDaemon() {
   if (process.env.ARIO_TEST_ORIGIN) {
     return {
@@ -19,6 +40,7 @@ export async function startTestDaemon() {
   const requests = new Set();
   const counts = new Map();
   const handoffs = new Map();
+  const mediaAdds = [];
   let offline = false;
   let large = false;
   let progress = 524288;
@@ -134,6 +156,38 @@ export async function startTestDaemon() {
       .end(JSON.stringify(body));
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, 'http://127.0.0.1');
+    if (url.pathname === '/media-fixture' || url.pathname === '/media-frame') {
+      const embed = url.pathname === '/media-frame';
+      response.writeHead(200, { 'Content-Type': 'text/html' });
+      response.end(
+        embed
+          ? `<audio controls preload="metadata" src="${embeddedMediaPath}"></audio>`
+          : '<audio controls preload="metadata" src="/media-files/clip.wav"></audio><iframe src="/media-frame" title="Embedded player"></iframe>',
+      );
+      return;
+    }
+    if (url.pathname === '/media-redirect')
+      return response
+        .writeHead(302, { Location: `/media-files/stream${url.search}` })
+        .end();
+    if (url.pathname.startsWith('/media-files/')) {
+      const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.range ?? '');
+      const start = Number(range?.[1] ?? 0);
+      const end = Math.min(
+        Number(range?.[2] || wav.length - 1),
+        wav.length - 1,
+      );
+      response.writeHead(range ? 206 : 200, {
+        'Content-Type': 'audio/wav',
+        'Accept-Ranges': 'bytes',
+        'Content-Length': end - start + 1,
+        ...(range && {
+          'Content-Range': `bytes ${start}-${end}/${wav.length}`,
+        }),
+      });
+      response.end(wav.subarray(start, end + 1));
+      return;
+    }
     if (url.pathname === '/capture-fixture') {
       response.writeHead(200, {
         'Content-Type': 'text/html',
@@ -239,6 +293,22 @@ export async function startTestDaemon() {
       );
       return;
     }
+    if (request.method === 'POST' && url.pathname === '/downloads') {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const payload = JSON.parse(Buffer.concat(chunks).toString());
+      const mediaUrl = payload.inputs?.[0]?.Url;
+      if (
+        !mediaUrl?.includes('/media-files/') &&
+        !mediaUrl?.includes('/media-redirect')
+      )
+        return response.writeHead(404).end();
+      mediaAdds.push(payload);
+      const item = download(0);
+      item.download.url = mediaUrl;
+      json(response, [item]);
+      return;
+    }
     const body = {
       '/health': health,
       '/settings': settings,
@@ -290,6 +360,7 @@ export async function startTestDaemon() {
   return {
     origin,
     fixture: true,
+    mediaAdds,
     setOffline(value) {
       offline = value;
     },
@@ -323,6 +394,7 @@ export async function startTestDaemon() {
           'GET /downloads',
           'GET /queues',
           'GET /queues/2',
+          'POST /downloads',
         ]),
       );
     },

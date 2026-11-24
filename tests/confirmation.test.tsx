@@ -11,6 +11,7 @@ import { createConfirmations } from '@/shared/browser/confirmations';
 import { handoffLink } from '@/shared/types/confirmation';
 import { defaultExtensionSettings } from '@/shared/types/settings';
 import { capabilitiesUrl } from './fixtures/daemon';
+import { liveDownload } from './fixtures/dashboard';
 import { renderPage } from './render-page';
 import { server } from './setup';
 
@@ -113,6 +114,56 @@ function renderConfirmation(
   );
   return renderPage(<Confirmation hash={draft.hash} />);
 }
+
+it('adds media once through the ordinary URL API and preserves a signed URL', async () => {
+  const url = 'https://files.example.test/clip.mp4?signature=x%2Fz%2B';
+  const manager = createConfirmations();
+  const writes: unknown[] = [];
+  server.use(
+    http.get(capabilitiesUrl, () => new HttpResponse(null, { status: 404 })),
+    http.post(`${defaultDaemonOrigin}/downloads`, async ({ request }) => {
+      writes.push(await request.json());
+      return HttpResponse.json([liveDownload(42, { url })]);
+    }),
+  );
+  await manager.openMedia(url);
+  const draft = await openedWindow();
+  const user = userEvent.setup();
+  renderConfirmation(manager, draft);
+  expect(await screen.findByText('clip.mp4')).toBeVisible();
+  expect(screen.queryByText('Use browser session')).not.toBeInTheDocument();
+  await user.selectOptions(await screen.findByLabelText('Queue'), '2');
+  await user.click(screen.getByRole('button', { name: 'Save for later' }));
+  expect(await screen.findByText('Added to Ario.')).toBeVisible();
+  await manager.submit(draft.id, start, false, draft.sender);
+  expect(writes).toEqual([
+    {
+      ...start,
+      queue_id: 2,
+      start_immediately: false,
+      inputs: [{ Url: url }],
+    },
+  ]);
+});
+
+it('keeps a media submission locked after an uncertain response and background restart', async () => {
+  const manager = createConfirmations();
+  const add = vi.fn(() => HttpResponse.error());
+  server.use(http.post(`${defaultDaemonOrigin}/downloads`, add));
+  await manager.openMedia('https://files.example.test/movie.mp4');
+  const { id, sender } = await openedWindow();
+  await expect(manager.submit(id, start, false, sender)).resolves.toEqual({
+    state: 'unknown',
+  });
+  const restarted = createConfirmations();
+  await expect(restarted.get(id, sender)).resolves.toMatchObject({
+    outcome: { state: 'unknown' },
+  });
+  await expect(restarted.submit(id, start, false, sender)).resolves.toEqual({
+    state: 'unknown',
+  });
+  expect(add).toHaveBeenCalledTimes(1);
+});
 
 it('registers a link menu and always opens an opaque confirmation even with suppression enabled', async () => {
   const manager = createConfirmations();

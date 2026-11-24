@@ -25,6 +25,7 @@ it('keeps capture defaults and merges concurrent settings changes', async () => 
     version: 1,
     connection: { origin: defaultDaemonOrigin },
     appearance: 'system',
+    detectMedia: true,
     capture: {
       enabled: true,
       askBeforeDownloading: true,

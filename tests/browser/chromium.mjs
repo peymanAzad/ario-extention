@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { darkBackground, lightBackground, readBuild } from './build.mjs';
 import { openSmokeConfirmation, smokeLink } from './confirmation.mjs';
-import { startTestDaemon } from './daemon.mjs';
+import { embeddedMediaPath, startTestDaemon } from './daemon.mjs';
 import {
   setFormValue,
   verifyTransfer,
@@ -592,6 +592,73 @@ try {
         ({ url, state }) => url.endsWith('/disable') && state === 'complete',
       );
     });
+  }
+
+  if (daemon.fixture) {
+    await popup.goto(`${origin}/popup.html`);
+    await popup.getByRole('button', { name: 'Media', exact: true }).waitFor();
+    const source = await context.newPage();
+    await source.goto(`${daemon.origin}/media-fixture`);
+    await source.bringToFront();
+    const mainPlayer = source.getByRole('button', {
+      name: 'Download with Ario',
+    });
+    const embedded = source
+      .frameLocator('iframe')
+      .getByRole('button', { name: 'Download with Ario' });
+    await mainPlayer.waitFor();
+    await embedded.waitFor();
+
+    await popup
+      .getByRole('button', { name: 'Media', exact: true })
+      .evaluate((button) => button.click());
+    const audio = popup.getByRole('button', { name: 'Download clip.wav' });
+    await audio.waitFor();
+    await popup
+      .getByRole('button', { name: 'Download media-redirect' })
+      .waitFor();
+
+    const fromPopup = context.waitForEvent('page');
+    await audio.evaluate((button) => button.click());
+    const first = await fromPopup;
+    await first.getByRole('button', { name: 'Start now' }).click();
+    await first.getByText('Added to Ario.').waitFor();
+    await first.getByRole('button', { name: 'Close' }).click();
+
+    const fromPlayer = context.waitForEvent('page');
+    await embedded.click();
+    const second = await fromPlayer;
+    await second.getByRole('button', { name: 'Save for later' }).click();
+    await second.getByText('Added to Ario.').waitFor();
+    await second.getByRole('button', { name: 'Close' }).click();
+    assert.deepEqual(
+      daemon.mediaAdds.map(({ inputs, start_immediately }) => [
+        inputs[0].Url,
+        start_immediately,
+      ]),
+      [
+        [`${daemon.origin}/media-files/clip.wav`, true],
+        [`${daemon.origin}${embeddedMediaPath}`, false],
+      ],
+    );
+
+    const other = await context.newPage();
+    await other.goto(`${daemon.origin}/capture-fixture`);
+    await other.bringToFront();
+    await audio.waitFor({ state: 'detached' });
+    await source.bringToFront();
+    await audio.waitFor();
+
+    const detection = options.getByRole('switch', { name: 'Detect media' });
+    assert.equal(await detection.isChecked(), true);
+    await detection.click();
+    await mainPlayer.waitFor({ state: 'detached' });
+    await embedded.waitFor({ state: 'detached' });
+    await detection.click();
+    await mainPlayer.waitFor();
+    await source.goto(`${daemon.origin}/capture-fixture`);
+    await source.bringToFront();
+    await audio.waitFor({ state: 'detached' });
   }
 
   daemon.verify();

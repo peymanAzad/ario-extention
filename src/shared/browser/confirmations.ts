@@ -8,6 +8,7 @@ import {
   stageBrowserHandoff,
   type HandoffReceipt,
 } from '@/shared/api/browser-handoffs';
+import { addUrlDownload } from '@/shared/api/download-operations';
 import { readSettings } from '@/shared/storage/settings';
 import { supportsBrowserHandoff } from '@/shared/types/browser-capabilities';
 import { ArioError } from '@/shared/types/connection';
@@ -41,6 +42,8 @@ const draftSchema = z.object({
     .object({ tabId: z.int().nonnegative(), pageUrl: z.string() })
     .nullable(),
   downloadId: downloadIdSchema.optional(),
+  media: z.literal(true).optional(),
+  submissionUnknown: z.literal(true).optional(),
 });
 type Draft = z.infer<typeof draftSchema>;
 
@@ -71,6 +74,7 @@ function saveJournal(id: string, entry: Journal) {
 
 const editing = { state: 'draft' } as const;
 const pending = { state: 'pending' } as const;
+const unknown = { state: 'unknown' } as const;
 
 const confirmationError = (message: string) =>
   new ArioError({ kind: 'extension', message });
@@ -83,14 +87,10 @@ export function createConfirmations() {
     return `${browser.runtime.getURL(confirmationPage)}#${id}`;
   }
 
-  async function open(
-    info: Browser.contextMenus.OnClickData,
-    tab?: Browser.tabs.Tab,
+  async function openDraft(
+    draft: Pick<Draft, 'url' | 'source' | 'media'>,
+    incognito?: boolean,
   ) {
-    if (info.menuItemId !== menuId) return;
-    const link = handoffLink(info.linkUrl);
-    if (!link) return;
-
     const id = crypto.randomUUID();
     const start = async () => {
       const { connection } = await readSettings();
@@ -100,16 +100,22 @@ export function createConfirmations() {
         focused: true,
         width: 500,
         height: 565,
-        ...(tab?.incognito && { incognito: true }),
+        ...(incognito && { incognito: true }),
       });
-      if (popup?.id === undefined) return;
-      const draft: Draft = {
-        windowId: popup.id,
-        origin: connection.origin,
-        url: link.href,
-        source: sessionSource(link, info, tab),
-      };
-      await browser.storage.session.set({ [storageKey(id)]: draft });
+      if (popup?.id === undefined)
+        throw confirmationError('Could not open download confirmation.');
+      try {
+        await browser.storage.session.set({
+          [storageKey(id)]: {
+            ...draft,
+            windowId: popup.id,
+            origin: connection.origin,
+          } satisfies Draft,
+        });
+      } catch (error) {
+        await browser.windows.remove(popup.id).catch(() => {});
+        throw error;
+      }
     };
     const opened = start();
     opening.set(id, opened);
@@ -118,6 +124,25 @@ export function createConfirmations() {
     } finally {
       opening.delete(id);
     }
+  }
+
+  async function open(
+    info: Browser.contextMenus.OnClickData,
+    tab?: Browser.tabs.Tab,
+  ) {
+    if (info.menuItemId !== menuId) return;
+    const link = handoffLink(info.linkUrl);
+    if (link)
+      await openDraft(
+        { url: link.href, source: sessionSource(link, info, tab) },
+        tab?.incognito,
+      );
+  }
+
+  async function openMedia(url: string) {
+    if (!(await readSettings()).detectMedia)
+      throw confirmationError('Media detection is off.');
+    await openDraft({ url, source: null, media: true });
   }
 
   async function getOwnedDraft(
@@ -212,14 +237,17 @@ export function createConfirmations() {
     if (!draft) return null;
     const outcome: ConfirmationOutcome = draft.downloadId
       ? { state: 'committed', downloadId: draft.downloadId }
-      : (await readJournal(id))
-        ? pending
-        : editing;
+      : draft.submissionUnknown
+        ? unknown
+        : (await readJournal(id))
+          ? pending
+          : editing;
     return {
       id,
       url: draft.url,
       origin: draft.origin,
       sessionHost: draft.source ? sessionHostPattern(new URL(draft.url)) : null,
+      ...(draft.media && { media: true }),
       outcome,
     };
   }
@@ -231,9 +259,45 @@ export function createConfirmations() {
       const draft = await readDraft(id);
       if (draft?.downloadId)
         return { state: 'committed', downloadId: draft.downloadId };
+      if (draft?.submissionUnknown) return unknown;
       const entry = await readJournal(id);
       return entry ? recover(id, entry) : editing;
     });
+  }
+
+  async function submitMedia(
+    id: string,
+    draft: Draft,
+    options: ImportOptions,
+  ): Promise<ConfirmationOutcome> {
+    if (draft.submissionUnknown) return unknown;
+    const settings = await readSettings();
+    if (!settings.detectMedia || draft.origin !== settings.connection.origin)
+      throw confirmationError(
+        'Media detection or the daemon address changed. Open a new confirmation.',
+      );
+
+    const key = storageKey(id);
+    // The ordinary URL endpoint cannot reconcile a lost response. Lock before
+    // sending so reopening this confirmation cannot submit the same request.
+    await browser.storage.session.set({
+      [key]: { ...draft, submissionUnknown: true },
+    });
+    let downloadId;
+    try {
+      const { download } = await addUrlDownload(
+        draft.origin,
+        draft.url,
+        options,
+      );
+      downloadId = download.id;
+    } catch (error) {
+      if (!isHandoffRejection(error)) return unknown;
+      await browser.storage.session.set({ [key]: draft });
+      throw error;
+    }
+    await browser.storage.session.set({ [key]: { ...draft, downloadId } });
+    return { state: 'committed', downloadId };
   }
 
   async function submit(
@@ -249,6 +313,7 @@ export function createConfirmations() {
       if (!draft) throw confirmationError('This confirmation has expired.');
       if (draft.downloadId)
         return { state: 'committed', downloadId: draft.downloadId };
+      if (draft.media) return submitMedia(id, draft, options);
       const existing = await readJournal(id);
       if (existing) return recover(id, existing);
 
@@ -359,5 +424,14 @@ export function createConfirmations() {
     void reconcile().catch(() => undefined);
   }
 
-  return { register, open, get, check, submit, reconcile, discardClosedDrafts };
+  return {
+    register,
+    open,
+    openMedia,
+    get,
+    check,
+    submit,
+    reconcile,
+    discardClosedDrafts,
+  };
 }

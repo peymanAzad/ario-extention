@@ -20,6 +20,7 @@ import {
 } from '@/shared/types/messages';
 import { createCapture } from './capture';
 import { createConfirmations } from './confirmations';
+import { createMedia } from './media';
 
 const uiPages = ['/popup.html', '/options.html', '/confirmation.html'] as const;
 type Reply = BackgroundReply<BackgroundResults[keyof BackgroundResults]>;
@@ -39,6 +40,7 @@ export function isTrustedUi(sender: Browser.runtime.MessageSender): boolean {
 export function createBackgroundHandler(
   confirmations = createConfirmations(),
   capture = createCapture(),
+  media = createMedia(confirmations.openMedia),
 ) {
   const requests = new Map<string, AbortController>();
 
@@ -46,7 +48,7 @@ export function createBackgroundHandler(
     message: unknown,
     sender: Browser.runtime.MessageSender,
   ): Promise<Reply> | undefined {
-    if (!isTrustedUi(sender)) return undefined;
+    if (!isTrustedUi(sender)) return media.onPageMessage(message, sender);
     const parsed = backgroundMessageSchema.safeParse(message);
     if (!parsed.success) return undefined;
 
@@ -104,6 +106,13 @@ export function createBackgroundHandler(
       try {
         let data: BackgroundResults[keyof BackgroundResults];
         switch (message.operation) {
+          case 'media.list':
+            data = await media.list();
+            break;
+          case 'media.open':
+            await media.openFromPopup(message.id);
+            data = null;
+            break;
           case 'capture.enable':
             data = await capture.setEnabled(message.enabled);
             break;

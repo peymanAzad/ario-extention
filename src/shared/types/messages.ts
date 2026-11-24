@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { CaptureNotice } from './capture';
 import type { BrowserCapabilities } from './browser-capabilities';
+import type { DetectedMedia } from './media';
 import {
   confirmationIdSchema,
   type ConfirmationDraft,
@@ -45,6 +46,8 @@ const daemonRequest = {
 const downloadRequest = { ...daemonRequest, id: downloadIdSchema };
 
 export const backgroundMessageSchema = z.discriminatedUnion('operation', [
+  z.strictObject({ operation: z.literal('media.list') }),
+  z.strictObject({ operation: z.literal('media.open'), id: z.uuid() }),
   z.strictObject({
     operation: z.literal('confirmation.get'),
     id: confirmationIdSchema,
@@ -203,6 +206,8 @@ export const backgroundMessageSchema = z.discriminatedUnion('operation', [
 
 export type BackgroundMessage = z.input<typeof backgroundMessageSchema>;
 export type BackgroundResults = {
+  'media.list': DetectedMedia[];
+  'media.open': null;
   'capture.enable': ExtensionSettings;
   'capture.preferences': ExtensionSettings;
   'capture.list': CaptureNotice[];

@@ -26,6 +26,7 @@ import { browserRecoveryMessage } from '@/shared/types/capture';
 import { fineTuneSchema } from '@/shared/types/daemon';
 import type { ImportOptions } from '@/shared/types/download-workflows';
 import { mainQueueId } from '@/shared/types/queue-workflows';
+import { mediaFileName } from '@/shared/types/media';
 import { Button } from '@/shared/ui/button';
 import { Brand } from '@/shared/ui/shell';
 
@@ -35,13 +36,7 @@ const closeWindow = () => window.close();
 function linkName(url: URL) {
   if (url.protocol === 'magnet:')
     return url.searchParams.get('dn')?.trim() || 'Magnet link';
-  const name = url.pathname.split('/').filter(Boolean).at(-1);
-  if (!name) return url.hostname;
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    return name;
-  }
+  return mediaFileName(url);
 }
 
 export function Confirmation({
@@ -68,7 +63,11 @@ export function Confirmation({
         <div className="mb-6 flex items-center justify-between gap-3">
           <Brand />
           <span className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground">
-            {draft.data?.capture ? 'Browser download' : 'Browser link'}
+            {draft.data?.media
+              ? 'Media'
+              : draft.data?.capture
+                ? 'Browser download'
+                : 'Browser link'}
           </span>
         </div>
         <h1 id="confirmation-title">Download with Ario</h1>
@@ -84,7 +83,7 @@ export function Confirmation({
                 ? 'Opening download confirmation…'
                 : draft.isError
                   ? draft.error.message
-                  : 'This confirmation has expired. Right-click the link to open a new one.'}
+                  : 'This confirmation has expired. Open a new one from the browser.'}
             </p>
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={closeWindow}>
@@ -104,13 +103,13 @@ export function Confirmation({
 }
 
 function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
-  const { id, origin, outcome, sessionHost, capture } = draft;
+  const { id, origin, outcome, sessionHost, capture, media } = draft;
   const queryClient = useQueryClient();
   const capabilities = useBrowserCapabilities(
     origin,
-    outcome.state === 'draft',
+    outcome.state === 'draft' && !media,
   );
-  const supported = supportsBrowserHandoff(capabilities.data);
+  const supported = Boolean(media) || supportsBrowserHandoff(capabilities.data);
   const queues = useQueues(origin, supported && outcome.state === 'draft');
   const [selectedQueue, setSelectedQueue] = useState<number>();
   const [override, setOverride] = useState(
@@ -182,8 +181,9 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
     });
   }
 
-  const problem = capabilities.error ?? queues.error;
-  const loading = capabilities.isFetching || (supported && queues.isPending);
+  const problem = media ? queues.error : (capabilities.error ?? queues.error);
+  const loading =
+    (!media && capabilities.isFetching) || (supported && queues.isPending);
 
   return (
     <>
@@ -212,7 +212,9 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
                   ]
                     .filter(Boolean)
                     .join(' · ')
-                : draft.url}
+                : media
+                  ? url.host
+                  : draft.url}
             </bdi>
           </p>
         </div>
@@ -244,6 +246,18 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
           <p role="status" className="flex items-center gap-2 text-xs">
             <CircleCheck className="size-4 text-primary" aria-hidden="true" />{' '}
             Added to Ario.
+          </p>
+          <div className="mt-6 flex justify-end">
+            <Button type="button" onClick={closeWindow}>
+              Close
+            </Button>
+          </div>
+        </>
+      ) : outcome.state === 'unknown' ? (
+        <>
+          <p role="alert" className="text-xs text-muted-foreground">
+            Ario could not confirm whether the download was added. Check
+            Downloads before trying again.
           </p>
           <div className="mt-6 flex justify-end">
             <Button type="button" onClick={closeWindow}>
@@ -343,7 +357,7 @@ function ConfirmationForm({ draft }: { draft: ConfirmationDraft }) {
                   inherit.
                 </p>
               )}
-              {!capture && !magnet && (
+              {!capture && !magnet && !media && (
                 <div>
                   <label className="flex items-start gap-2 text-xs">
                     <input
