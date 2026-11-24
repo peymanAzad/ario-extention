@@ -198,35 +198,60 @@ export function observeDownloads() {
       requests.delete(details.requestId);
   };
 
-  function attach() {
+  function attach(ready?: Promise<boolean>) {
     const api = browser.webRequest;
     if (!api || detach) return;
+
+    // Events can arrive while the background is loading the capture preference.
+    let initializing = ready;
+    void ready?.then((enabled) => {
+      if (enabled) initializing = undefined;
+    });
+    function whenEnabled<Details>(listener: (details: Details) => void) {
+      return (details: Details): undefined => {
+        if (detach !== removeListeners) return;
+        if (initializing) {
+          void initializing.then((enabled) => {
+            if (enabled && detach === removeListeners) listener(details);
+          });
+        } else {
+          listener(details);
+        }
+      };
+    }
+    const onBegin = whenEnabled(begin);
+    const onSent = whenEnabled(sent);
+    const onReceived = whenEnabled(received);
+    const onRedirect = whenEnabled(redirect);
+    const onEnd = whenEnabled(end);
+    function removeListeners() {
+      api.onBeforeRequest.removeListener(onBegin);
+      api.onSendHeaders.removeListener(onSent);
+      api.onHeadersReceived.removeListener(onReceived);
+      api.onBeforeRedirect.removeListener(onRedirect);
+      api.onCompleted.removeListener(onEnd);
+      api.onErrorOccurred.removeListener(onEnd);
+    }
+
     const filter = {
       urls: capturePermissions.origins!,
       // Download navigations and browser save actions are reported here.
       types: ['main_frame', 'sub_frame', 'other'] as const,
     };
     const requestFilter = { ...filter, types: [...filter.types] };
-    api.onBeforeRequest.addListener(begin, requestFilter, ['requestBody']);
+    api.onBeforeRequest.addListener(onBegin, requestFilter, ['requestBody']);
     api.onSendHeaders.addListener(
-      sent,
+      onSent,
       requestFilter,
       import.meta.env.FIREFOX
         ? ['requestHeaders']
         : ['requestHeaders', 'extraHeaders'],
     );
-    api.onHeadersReceived.addListener(received, requestFilter);
-    api.onBeforeRedirect.addListener(redirect, requestFilter);
-    api.onCompleted.addListener(end, requestFilter);
-    api.onErrorOccurred.addListener(end, requestFilter);
-    detach = () => {
-      api.onBeforeRequest.removeListener(begin);
-      api.onSendHeaders.removeListener(sent);
-      api.onHeadersReceived.removeListener(received);
-      api.onBeforeRedirect.removeListener(redirect);
-      api.onCompleted.removeListener(end);
-      api.onErrorOccurred.removeListener(end);
-    };
+    api.onHeadersReceived.addListener(onReceived, requestFilter);
+    api.onBeforeRedirect.addListener(onRedirect, requestFilter);
+    api.onCompleted.addListener(onEnd, requestFilter);
+    api.onErrorOccurred.addListener(onEnd, requestFilter);
+    detach = removeListeners;
   }
 
   function stop() {

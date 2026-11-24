@@ -25,7 +25,7 @@ const captureFields = {
   useBrowserSession: z.boolean(),
 };
 export const capturePreferencesSchema = z.object({
-  enabled: z.boolean().default(false),
+  enabled: z.boolean().default(true),
   askBeforeDownloading: captureFields.askBeforeDownloading.default(true),
   defaultQueueId: captureFields.defaultQueueId.default(1),
   fineTuneOverride: captureFields.fineTuneOverride.default(null),

@@ -15,21 +15,18 @@ export async function readBuild(browser) {
   assert.deepEqual(manifest.permissions.toSorted(), [
     'alarms',
     'contextMenus',
-    'storage',
-  ]);
-  assert.deepEqual(manifest.optional_permissions.toSorted(), [
-    'cookies',
     'downloads',
+    'storage',
     'webRequest',
   ]);
-  assert.deepEqual(manifest.optional_host_permissions.toSorted(), [
+  assert.deepEqual(manifest.optional_permissions, ['cookies']);
+  assert.deepEqual(manifest.host_permissions.toSorted(), [
     'http://*/*',
+    'http://127.0.0.1/*',
+    'http://[::1]/*',
+    'http://localhost/*',
     'https://*/*',
   ]);
-  assert.deepEqual(
-    manifest.host_permissions.toSorted(),
-    ['http://127.0.0.1/*', 'http://[::1]/*', 'http://localhost/*'].toSorted(),
-  );
   assert.equal(manifest.action.default_popup, 'popup.html');
   assert.equal(manifest.options_ui.page, 'options.html');
 

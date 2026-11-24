@@ -143,7 +143,7 @@ export async function startTestDaemon() {
       response.end(`<a id="capture-keep" href="/capture-files/keep">Keep test</a>
         <a id="capture-ask" href="/capture-files/ask">Ask test</a>
         <a id="capture-close" href="/capture-files/close">Close test</a>
-        <a id="capture-revoke" href="/capture-files/revoke">Revoke test</a>
+        <a id="capture-disable" href="/capture-files/disable">Disable test</a>
         <a id="capture-live" href="/capture-files/live">Live handoff test</a>
         <a id="capture-automatic" href="/capture-go">Automatic test</a>
         <form method="POST" action="/capture-files/post"><button id="capture-post">POST test</button></form>`);

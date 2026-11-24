@@ -10,24 +10,24 @@
 
 Ario brings the local Ario download manager to your browser toolbar. Check progress, search downloads, add web links, magnets or torrent files, and organize downloads into queues with their own schedules.
 
-Ario requires a separately installed Ario daemon and aria2 on the same desktop computer. A daemon that supports browser handoff protocol version 1 adds **Download with Ario** to supported link workflows and lets you opt in to browser download capture. Capture can ask which queue and settings to use or apply your saved defaults.
+Ario requires a separately installed Ario daemon and aria2 on the same desktop computer. A daemon that supports browser handoff protocol version 1 adds **Download with Ario** to supported link workflows and enables automatic detection of eligible browser downloads. Capture asks which queue and settings to use by default. You can apply saved defaults automatically or turn capture off in Settings.
 
 With capture enabled, Ario observes recent HTTP(S) requests to identify eligible browser downloads and passes their URLs and file details to your local daemon. You can separately choose to share applicable cookies and referrer to complete a download from a site where you are signed in. The extension has no analytics or developer-operated data collection service.
 
 ## Browser permissions
 
-| Permission             | Use                                                                                                                                                   |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`              | Save local preferences, temporary confirmation drafts, and handoff recovery state.                                                                    |
-| `contextMenus`         | Add **Download with Ario** to browser link menus.                                                                                                     |
-| `alarms`               | Reconcile incomplete handoffs after the background has been suspended.                                                                                |
-| Loopback HTTP hosts    | Reach the separately installed Ario daemon at the configured local port.                                                                              |
-| Optional `downloads`   | Find, pause, cancel, and resume browser downloads during capture and recovery.                                                                        |
-| Optional `webRequest`  | Observe HTTP(S) requests and redirects to match an eligible download and safely reproduce its GET request.                                            |
-| Optional HTTP(S) sites | Observe download requests from any site if capture is enabled. Confirmations that use cookies can instead request access only to the applicable host. |
-| Optional `cookies`     | Retrieve cookies that apply to an eligible same-origin context-menu link after you enable session sharing in its confirmation.                        |
+| Permission          | Use                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `storage`           | Save local preferences, temporary confirmation drafts, and handoff recovery state.                                             |
+| `contextMenus`      | Add **Download with Ario** to browser link menus.                                                                              |
+| `alarms`            | Reconcile incomplete handoffs after the background has been suspended.                                                         |
+| Loopback HTTP hosts | Reach the separately installed Ario daemon at the configured local port.                                                       |
+| `downloads`         | Find, pause, cancel, and resume browser downloads during capture and recovery.                                                 |
+| `webRequest`        | Observe HTTP(S) requests and redirects to match an eligible download and safely reproduce its GET request.                     |
+| HTTP(S) sites       | Observe download requests across sites while capture is enabled.                                                               |
+| Optional `cookies`  | Retrieve cookies that apply to an eligible same-origin context-menu link after you enable session sharing in its confirmation. |
 
-In Firefox, the manifest discloses browsing activity, website activity, and website content because user-selected links, supported download details, and explicitly shared session context go to the local daemon. Capture and session sharing are individually opt-in. Chrome's dashboard disclosures should cover website content, web activity, and authentication information such as cookies, including these local uses. [Ario privacy notice](PRIVACY.md), [Mozilla data consent reference](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/), [Chrome privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy)
+In Firefox, the manifest discloses browsing activity, website activity, and website content because user-selected links, supported download details, and explicitly shared session context go to the local daemon. Capture is on by default, and session sharing requires opt-in. Chrome's dashboard disclosures should cover website content, web activity, and authentication information such as cookies, including these local uses. [Ario privacy notice](PRIVACY.md), [Mozilla data consent reference](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/), [Chrome privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy)
 
 ## Capture limitations
 
@@ -47,7 +47,7 @@ Use the [128 px icon](../../src/public/icon/128.png), [440 × 280 Chrome tile](c
 
 The [build instructions](../../README.md#rebuild-from-source) are included in the Firefox source ZIP. Submit the Chrome ZIP to Chrome Web Store and the Firefox ZIP and its matching source ZIP to AMO. Use the build ZIPs from the same revision. Provide a public URL for the privacy notice and the publisher's support details when setting up the listings. [Chrome image specifications](https://developer.chrome.com/docs/webstore/images), [Mozilla source submission](https://extensionworkshop.com/documentation/publish/source-code-submission/)
 
-Reviewer walkthrough. Start `ario_daemon` with `aria2c` available, test the default connection in Settings, and add a public HTTPS download. To review browser handoff, use the protocol-1 daemon and try the link menu and **Capture browser downloads** with a directly downloadable HTTP(S) link. Choose **Keep in browser** on a second capture to verify that the original resumes. For an older management-compatible daemon, verify that downloads and queues work and Settings shows upgrade guidance for capture.
+Reviewer walkthrough. Start `ario_daemon` with `aria2c` available, test the default connection in Settings, and add a public HTTPS download. With a protocol-1 daemon, try the link menu and click a directly downloadable HTTP(S) link to verify capture on a fresh install. Choose **Keep in browser** on a second capture to verify that the original resumes. Turn off **Capture browser downloads** in Settings and verify subsequent downloads stay in the browser. For an older management-compatible daemon, verify that downloads and queues work and Settings shows upgrade guidance for capture.
 
 ## Smoke checks
 

@@ -32,9 +32,6 @@ function mockBrowser() {
   const granted = vi
     .spyOn(fakeBrowser.permissions, 'contains')
     .mockImplementation(async () => true);
-  vi.spyOn(fakeBrowser.permissions, 'remove').mockImplementation(
-    async () => true,
-  );
   vi.spyOn(fakeBrowser.alarms, 'get').mockResolvedValue(undefined);
   vi.spyOn(fakeBrowser.alarms, 'create').mockImplementation(async () => {});
   const badge = vi
@@ -87,6 +84,13 @@ function mockBrowser() {
       });
     });
   const listen = () => undefined;
+  for (const event of [
+    fakeBrowser.permissions.onAdded,
+    fakeBrowser.permissions.onRemoved,
+    fakeBrowser.runtime.onStartup,
+    fakeBrowser.alarms.onAlarm,
+  ])
+    vi.spyOn(event, 'addListener').mockImplementation(listen);
   const begin = vi
     .spyOn(fakeBrowser.webRequest.onBeforeRequest, 'addListener')
     .mockImplementation(listen);
@@ -107,9 +111,9 @@ function mockBrowser() {
     fakeBrowser.webRequest.onErrorOccurred,
     'addListener',
   ).mockImplementation(listen);
-  vi.spyOn(fakeBrowser.downloads.onCreated, 'addListener').mockImplementation(
-    listen,
-  );
+  const created = vi
+    .spyOn(fakeBrowser.downloads.onCreated, 'addListener')
+    .mockImplementation(listen);
   vi.spyOn(
     fakeBrowser.downloads.onCreated,
     'removeListener',
@@ -223,6 +227,7 @@ function mockBrowser() {
     adjust,
     badge,
     cancel,
+    created,
     events,
     granted,
     items,
@@ -310,10 +315,12 @@ describe.each(['chrome', 'firefox'])('%s capture', (target) => {
   it('stages while paused, cancels before commit, and preserves future defaults after suppression', async () => {
     const b = mockBrowser();
     const daemon = mockDaemon(b.events);
-    await b.manager.setEnabled(true);
+    b.manager.register();
     const item = b.make();
     b.observe(item);
-    await Promise.all([b.manager.intercept(item), b.manager.intercept(item)]);
+    b.created.mock.lastCall![0](item);
+    await b.manager.intercept(item);
+    await vi.waitFor(() => expect(b.windows).toHaveBeenCalledTimes(1));
     const { id, sender } = await b.opened();
     expect((await b.manager.get(id, sender))?.capture).toMatchObject({
       options: start,
@@ -501,10 +508,9 @@ describe.each(['chrome', 'firefox'])('%s capture', (target) => {
     const b = mockBrowser();
     mockDaemon(b.events);
     b.granted.mockImplementationOnce(async () => false);
-    await expect(b.manager.setEnabled(true)).rejects.toThrow(
-      'permission is required',
-    );
-    expect((await readSettings()).capture.enabled).toBe(false);
+    await b.manager.setEnabled(true);
+    expect((await readSettings()).capture.enabled).toBe(true);
+    expect(b.created).not.toHaveBeenCalled();
     await b.manager.setEnabled(true);
     b.windows
       .mockRejectedValueOnce(new Error('Can’t open window'))
@@ -534,6 +540,7 @@ describe.each(['chrome', 'firefox'])('%s capture', (target) => {
     await b.manager.reconcile();
     expect(b.resume).toHaveBeenCalledTimes(2);
     expect(await b.manager.list()).toEqual([]);
+    expect((await readSettings()).capture.enabled).toBe(true);
   });
 
   it('resumes during daemon outages and leaves a journal to abort an uncertain stage', async () => {

@@ -22,7 +22,7 @@ import type {
   ConfirmationDraft,
   ConfirmationOutcome,
 } from '@/shared/types/confirmation';
-import { healthSchema, queueSchema } from '@/shared/types/daemon';
+import { queueSchema } from '@/shared/types/daemon';
 import type { ImportOptions } from '@/shared/types/download-workflows';
 import type { CaptureSettingsPatch } from '@/shared/types/settings';
 import {
@@ -72,6 +72,7 @@ export function createCapture() {
   // Never write observed request headers to extension storage.
   const sessions = new Map<string, HandoffSession>();
   let statusUpdate: Promise<void> = Promise.resolve();
+  let listenerUpdate = Promise.resolve(false);
 
   const permissionGranted = () =>
     browser.permissions.contains(capturePermissions);
@@ -685,8 +686,8 @@ export function createCapture() {
   const onCreated = (item: Browser.downloads.DownloadItem) => {
     void intercept(item).catch(ignore);
   };
-  function attach() {
-    observer.attach();
+  function attach(ready?: Promise<boolean>) {
+    observer.attach(ready);
     const api = browser.downloads;
     if (!api || createdApi) return;
     api.onCreated.addListener(onCreated);
@@ -703,42 +704,26 @@ export function createCapture() {
     }
   }
 
-  async function refreshPermissions() {
-    const { capture } = await readSettings();
-    const granted = await permissionGranted();
-    if (granted && capture.enabled) attach();
-    else {
-      detach();
-      if (capture.enabled)
-        await updateSettings({ capture: { enabled: false } });
-    }
-    await reconcile();
+  function refreshListeners() {
+    listenerUpdate = listenerUpdate
+      .catch(ignore)
+      .then(async () => {
+        const { capture } = await readSettings();
+        const enabled = capture.enabled && (await permissionGranted());
+        if (enabled) attach();
+        else detach();
+        return enabled;
+      })
+      .catch((error: unknown) => {
+        detach();
+        throw error;
+      });
+    return listenerUpdate;
   }
 
   async function setEnabled(enabled: boolean) {
-    if (enabled) {
-      if (!(await permissionGranted()))
-        throw captureError(
-          'Browser permission is required to capture downloads.',
-        );
-      const {
-        connection: { origin },
-      } = await readSettings();
-      await requestDaemon(origin, '/health', healthSchema);
-      if (!supportsBrowserHandoff(await readBrowserCapabilities(origin)))
-        throw captureError(
-          'Upgrade the Ario daemon to enable browser downloads.',
-        );
-    }
     const saved = await updateSettings({ capture: { enabled } });
-    if (enabled) attach();
-    else {
-      detach();
-      // Keep downloads permission for recovery and site access for link confirmations.
-      await browser.permissions
-        .remove({ permissions: ['webRequest'] })
-        .catch(ignore);
-    }
+    await refreshListeners();
     await reconcile();
     return saved;
   }
@@ -748,18 +733,14 @@ export function createCapture() {
   }
 
   function register() {
-    // Register synchronously when an optional namespace exists so a request can
-    // wake the Chrome worker. Interception itself always checks saved settings.
-    attach();
-    browser.permissions.onAdded.addListener(
-      () => void refreshPermissions().catch(ignore),
-    );
-    browser.permissions.onRemoved.addListener(
-      () => void refreshPermissions().catch(ignore),
-    );
-    browser.runtime.onStartup.addListener(
-      () => void refreshPermissions().catch(ignore),
-    );
+    // Register synchronously so the first request can wake the Chrome worker.
+    const ready = refreshListeners();
+    attach(ready.catch(() => false));
+    void ready.then(reconcile).catch(ignore);
+    const refresh = () => void refreshListeners().then(reconcile).catch(ignore);
+    browser.permissions.onAdded.addListener(refresh);
+    browser.permissions.onRemoved.addListener(refresh);
+    browser.runtime.onStartup.addListener(refresh);
     browser.alarms.onAlarm.addListener(({ name }) => {
       if (name === alarmName) void reconcile().catch(ignore);
     });
@@ -776,7 +757,6 @@ export function createCapture() {
         .catch(ignore);
     });
     watchSettings(() => void reconcile().catch(ignore));
-    void refreshPermissions().catch(ignore);
   }
 
   return {

@@ -233,8 +233,8 @@ try {
       assert.equal(
         await driver
           .findElement(By.css('[aria-label="Capture browser downloads"]'))
-          .isEnabled(),
-        false,
+          .isSelected(),
+        true,
       );
       await driver.switchTo().window(popupHandle);
     }
@@ -438,7 +438,6 @@ try {
       By.css('[aria-label="Capture browser downloads"]'),
     );
     await driver.wait(until.elementIsEnabled(enable), 10_000);
-    await enable.click();
     await driver.wait(() => enable.isSelected(), 10_000);
     await driver.switchTo().window(popupHandle);
     await driver.get(`${source}/capture-fixture`);
@@ -595,11 +594,10 @@ try {
       driver.findElement(By.css(`input[role="switch"][aria-label="${name}"]`));
     const enable = await captureSwitch('Capture browser downloads');
     await driver.wait(until.elementIsEnabled(enable), 10_000);
-    await enable.click();
     await driver.wait(
       () => enable.isSelected(),
       10_000,
-      'Expected Firefox capture permission to take effect',
+      'Expected capture to be enabled by default',
     );
     await driver.switchTo().newWindow('tab');
     const captureSource = await driver.getWindowHandle();
@@ -714,23 +712,17 @@ try {
     await ask.click();
     await driver.wait(() => ask.isSelected(), 10_000);
     await driver.switchTo().window(captureSource);
-    const revoked = await captureWindow('capture-revoke');
+    const paused = await captureWindow('capture-disable');
     await driver.switchTo().window(optionsHandle);
-    assert.equal(
-      await driver.executeAsyncScript(`
-      const done = arguments[0];
-      browser.permissions.remove({ permissions: ['webRequest'] }).then(done);
-    `),
-      true,
-    );
+    await enable.click();
     await driver.wait(
       async () => !(await enable.isSelected()),
       10_000,
-      'Expected Firefox capture to turn off after observation permission was removed',
+      'Expected Firefox capture to turn off in Settings',
     );
-    await driver.switchTo().window(revoked);
+    await driver.switchTo().window(paused);
     await waitForText('The download is continuing in your browser.');
-    await closeConfirmation(revoked);
+    await closeConfirmation(paused);
   }
 
   daemon.verify();

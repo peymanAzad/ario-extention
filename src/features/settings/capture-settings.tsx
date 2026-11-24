@@ -1,6 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { browser } from 'wxt/browser';
 import {
   FineTuneFields,
   fineTuneInput,
@@ -11,7 +10,6 @@ import {
   useDaemonHealth,
   useQueues,
 } from '@/shared/api/queries';
-import { capturePermissions } from '@/shared/browser/download-observation';
 import {
   enableCapture,
   saveCapturePreferences,
@@ -37,29 +35,15 @@ export function CaptureSettings({
   const healthy = health.isSuccess;
   const capabilities = useBrowserCapabilities(origin, healthy);
   const compatible = supportsBrowserHandoff(capabilities.data);
+  const needsUpgrade = capabilities.isSuccess && !compatible;
   const queues = useQueues(origin, healthy && compatible);
-  const enablement = useMutation({
-    mutationFn: async ({
-      enabled,
-      permission,
-    }: {
-      enabled: boolean;
-      permission?: Promise<boolean>;
-    }) => {
-      if (permission && !(await permission))
-        throw new Error(
-          'Permission was declined. Downloads will stay in the browser.',
-        );
-      return enableCapture(enabled);
-    },
-  });
+  const enablement = useMutation({ mutationFn: enableCapture });
   const save = useMutation({ mutationFn: saveCapturePreferences });
   const savedOverride = preferences.fineTuneOverride;
   const missingQueue =
     queues.isSuccess &&
     !queues.data.some(({ id }) => id === preferences.defaultQueueId);
   const busy = enablement.isPending || save.isPending;
-  const canEnable = healthy && compatible && !capabilities.isError;
 
   function update(patch: CaptureSettingsPatch) {
     enablement.reset();
@@ -76,25 +60,23 @@ export function CaptureSettings({
       </h2>
       <CaptureSwitch
         label="Capture browser downloads"
-        description="Observe recent HTTP(S) requests to match browser downloads and send supported download URLs and file details to the local Ario daemon."
+        description="Handle supported browser downloads with the local Ario daemon."
         checked={preferences.enabled}
-        disabled={!ready || busy || (!preferences.enabled && !canEnable)}
+        disabled={!ready || busy}
         onChange={(enabled) => {
           save.reset();
-          // Invoke the permission prompt within the checkbox's user gesture.
-          const permission = enabled
-            ? browser.permissions.request(capturePermissions).catch(() => false)
-            : undefined;
-          enablement.mutate({ enabled, permission });
+          enablement.mutate(enabled);
         }}
       />
-      {ready && !preferences.enabled && !canEnable && (
-        <p className="mb-3 text-[11px] text-muted-foreground">
-          {healthy && capabilities.isSuccess
-            ? 'Upgrade the Ario daemon to enable browser downloads.'
-            : 'Connect to a compatible Ario daemon to enable capture.'}
-        </p>
-      )}
+      {ready &&
+        preferences.enabled &&
+        (health.isError || capabilities.isError || needsUpgrade) && (
+          <p className="mb-3 text-[11px] text-muted-foreground">
+            {needsUpgrade
+              ? 'Upgrade the Ario daemon to enable browser downloads.'
+              : 'Downloads stay in the browser while the Ario daemon is unavailable.'}
+          </p>
+        )}
       <CaptureSwitch
         label="Ask before downloading"
         description="Choose a queue and settings for each browser download."

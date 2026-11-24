@@ -43,14 +43,15 @@ def check_manifest(files, browser):
     manifest = json.loads(files["manifest.json"])
     assert manifest["manifest_version"] == 3
     assert manifest["version"] == PACKAGE["version"]
-    assert set(manifest["permissions"]) == {"storage", "contextMenus", "alarms"}
-    assert set(manifest["optional_permissions"]) == {"downloads", "cookies", "webRequest"}
+    assert set(manifest["permissions"]) == {"storage", "contextMenus", "alarms", "downloads", "webRequest"}
+    assert set(manifest["optional_permissions"]) == {"cookies"}
     assert set(manifest["host_permissions"]) == {
         "http://127.0.0.1/*",
         "http://localhost/*",
         "http://[::1]/*",
+        "http://*/*",
+        "https://*/*",
     }
-    assert set(manifest["optional_host_permissions"]) == {"http://*/*", "https://*/*"}
     assert manifest["incognito"] == "not_allowed"
     assert manifest["content_security_policy"] == {"extension_pages": CSP}
     assert not {"content_scripts", "externally_connectable", "web_accessible_resources", "sandbox"} & manifest.keys()

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -30,7 +30,7 @@ const context = await chromium.launchPersistentContext('', {
 });
 
 let daemon;
-let captureBuild;
+let downloadDir;
 try {
   daemon = await startTestDaemon();
   const browser = context.browser();
@@ -168,7 +168,7 @@ try {
       assert.ok(
         await options
           .getByRole('switch', { name: 'Capture browser downloads' })
-          .isDisabled(),
+          .isChecked(),
       );
     }
   }
@@ -437,50 +437,19 @@ try {
 
   if (daemon.fixture || daemon.handoff) {
     const source = await context.newPage();
-    // Headless Chrome cannot accept the native optional extension permission
-    // dialog. Exercise capture with an isolated copy granted access at install.
-    captureBuild = await mkdtemp(join(tmpdir(), 'ario-capture-chrome-'));
-    const captureExtension = join(captureBuild, 'extension');
-    await cp(directory, captureExtension, { recursive: true });
-    await writeFile(
-      join(captureExtension, 'manifest.json'),
-      JSON.stringify({
-        ...manifest,
-        permissions: [...manifest.permissions, 'downloads', 'webRequest'],
-        host_permissions: [
-          ...manifest.host_permissions,
-          ...manifest.optional_host_permissions,
-        ],
-      }),
-    );
+    downloadDir = await mkdtemp(join(tmpdir(), 'ario-capture-chrome-'));
     const captureCdp = await browser.newBrowserCDPSession();
-    const { id: captureExtensionId } = await captureCdp.send(
-      'Extensions.loadUnpacked',
-      { path: captureExtension },
-    );
     await captureCdp.send('Browser.setDownloadBehavior', {
       behavior: 'allow',
-      downloadPath: join(captureBuild, 'downloads'),
+      downloadPath: downloadDir,
       eventsEnabled: true,
     });
     await captureCdp.detach();
-    const captureOptions = await context.newPage();
-    await captureOptions.goto(
-      `chrome-extension://${captureExtensionId}/options.html`,
-    );
-    await captureOptions
-      .getByRole('textbox', { name: 'Server address' })
-      .fill(daemon.origin);
-    await captureOptions.getByRole('button', { name: 'Save address' }).click();
+    const captureOptions = options;
     const enable = captureOptions.getByRole('switch', {
       name: 'Capture browser downloads',
     });
-    await enable.click();
-    await captureOptions.waitForFunction(
-      () =>
-        document.querySelector('[aria-label="Capture browser downloads"]')
-          .checked,
-    );
+    assert.equal(await enable.isChecked(), true);
     await source.goto(
       `${daemon.sourceOrigin ?? daemon.origin}/capture-fixture`,
     );
@@ -610,6 +579,19 @@ try {
         !document.querySelector('[aria-label="Capture browser downloads"]')
           .checked,
     );
+    await captureOptions.reload();
+    await enable.waitFor();
+    await captureOptions.waitForFunction(
+      () => !document.querySelector('fieldset').disabled,
+    );
+    assert.equal(await enable.isChecked(), false);
+    await source.locator('#capture-disable').click();
+    await captureOptions.waitForFunction(async () => {
+      const downloads = await globalThis.chrome.downloads.search({});
+      return downloads.some(
+        ({ url, state }) => url.endsWith('/disable') && state === 'complete',
+      );
+    });
   }
 
   daemon.verify();
@@ -617,5 +599,5 @@ try {
 } finally {
   await context.close();
   await daemon?.close();
-  if (captureBuild) await rm(captureBuild, { recursive: true, force: true });
+  if (downloadDir) await rm(downloadDir, { recursive: true, force: true });
 }

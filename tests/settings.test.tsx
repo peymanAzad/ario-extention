@@ -6,7 +6,6 @@ import { expect, it, vi } from 'vitest';
 import { Options } from '@/features/settings/options';
 import { Popup } from '@/features/downloads/popup';
 import { defaultDaemonOrigin } from '@/shared/api/endpoint';
-import { capturePermissions } from '@/shared/browser/download-observation';
 import { saveSettings } from '@/shared/browser/messages';
 import { readSettings } from '@/shared/storage/settings';
 import {
@@ -27,7 +26,7 @@ it('keeps capture defaults and merges concurrent settings changes', async () => 
     connection: { origin: defaultDaemonOrigin },
     appearance: 'system',
     capture: {
-      enabled: false,
+      enabled: true,
       askBeforeDownloading: true,
       defaultQueueId: 1,
       fineTuneOverride: null,
@@ -116,11 +115,14 @@ it('reconnects after daemon and aria2 outages', async () => {
   expect(screen.getByText('Status unavailable')).toBeVisible();
 });
 
-it('requests capture access from Settings and saves preferences for future downloads', async () => {
+it('can turn off default capture in Settings and save preferences for future downloads', async () => {
   connectTestBackground();
   const request = vi
     .spyOn(fakeBrowser.permissions, 'request')
     .mockImplementation(async () => false);
+  vi.spyOn(fakeBrowser.permissions, 'contains').mockImplementation(
+    async () => true,
+  );
   const user = userEvent.setup();
   renderPage(<Options />);
 
@@ -128,12 +130,9 @@ it('requests capture access from Settings and saves preferences for future downl
     name: 'Capture browser downloads',
   });
   await waitFor(() => expect(enable).toBeEnabled());
+  expect(enable).toBeChecked();
   await user.click(enable);
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Permission was declined',
-  );
-  expect(request).toHaveBeenCalledExactlyOnceWith(capturePermissions);
-  expect(enable).not.toBeChecked();
+  await waitFor(() => expect(enable).not.toBeChecked());
 
   const queue = screen.getByRole('combobox', { name: 'Default queue' });
   await user.selectOptions(queue, '2');
@@ -168,4 +167,14 @@ it('requests capture access from Settings and saves preferences for future downl
   await expect(readSettings()).resolves.toMatchObject({
     capture: { useBrowserSession: true },
   });
+
+  server.use(daemonOffline);
+  await user.click(screen.getByRole('button', { name: 'Reconnect' }));
+  await screen.findByText('Daemon unavailable');
+  await user.click(enable);
+  await waitFor(() => expect(enable).toBeChecked());
+  await expect(readSettings()).resolves.toMatchObject({
+    capture: { enabled: true },
+  });
+  expect(request).not.toHaveBeenCalled();
 });

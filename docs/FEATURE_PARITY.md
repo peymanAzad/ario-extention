@@ -1,6 +1,6 @@
 # Ario TUI feature parity
 
-Phases 1–8 deliver the extension shell, appearance and connection settings, read-only daemon settings, the live download dashboard, download and queue management, context-menu handoff, and opt-in browser download capture. Management routes were checked against daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Browser handoff routes were checked against `640cc1c`. Paths are relative to the daemon origin.
+The extension provides appearance and connection settings, read-only daemon settings, the live download dashboard, download and queue management, context-menu handoff, and browser download capture enabled by default. Management routes were checked against daemon commit `da9ef00e5abe5a0df3baa526a6ce2a6b4e2e090f`. Browser handoff routes were checked against `640cc1c`. Paths are relative to the daemon origin.
 
 | TUI or browser workflow                                                                    | API or extension behavior                                                                                                                                                                                                                          | Phase |
 | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
